@@ -17966,5 +17966,87 @@ function tgBarHide(){const bar=$("tgBar");if(bar)bar.hidden=true;TG.pending=null
 {const _send=tgSend;tgSend=async function(text,plain,viaClick){if(!viaClick&&tgReady()&&TG.blocked){tgBarShow(text);return}
   if(!viaClick&&tgReady()&&TG.blocked===undefined){try{const r=await fetch(`https://api.telegram.org/bot${TG.tok}/getMe`);await r.json();TG.blocked=false}catch(e){TG.blocked=true;tgBarShow(text);return}}
   return _send(text,plain,viaClick)}}
+/* p180 — garbled dictation: Claude reconstructs the meaning instead of copying nonsense; "save" waits for Claude longer and retries once; the offline writer never repeats a sentence and never pastes free speech into the opening */
+/* 1. prompt rule */
+{const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n",`RULES\n0e. The shorthand is often DICTATED and the speech recognizer garbles words ("busy today with his father" = "presented today with his father"; "cullens inside" = "Cullen's sign"; "fever the or" = "fever"; "cricket" = "ketorolac"; "test trauma samples" = "blood samples"). Read it as a doctor would hear it: reconstruct the clinically intended meaning, write clean clinical sentences, and NEVER copy a garbled fragment word for word. If a fragment cannot be understood at all, leave it out of the note and name it in "missing" ("unclear dictation: '...'"). Never write a negative ("No fever") for a symptom the shorthand reports as present. If a specialty was contacted or the patient is referred, the disposition and follow-up must agree with that; do not write a family-medicine discharge for a patient awaiting a surgical review unless the options say discharge.\n`)}}
+/* 2. save waits for Claude up to 90 s and retries once; the draft is saved only as a last resort, and the status says so clearly */
+{const _save=qvSaveNow;qvSaveNow=function(){if(!(typeof QAI!=="undefined"&&QAI.on&&qaiProv()))return _save();
+  qvStatus("<b>Writing the final note…</b> it will be saved when the check is finished.");let tries=0;const start=()=>{tries++;try{qaiRun(true)}catch(e){}};start();
+  let n=0;const tick=()=>{n++;if(!QAI.busy&&QAI.B){qaiShow();_save();return}
+   if(!QAI.busy&&!QAI.B){if(tries<2){qvStatus("<b>Claude did not answer; trying once more…</b>");start();setTimeout(tick,800);return}qvStatus("<b>Claude could not write this note</b> ("+($("qaiSt")?$("qaiSt").textContent:"")+"). The draft was saved; press <b>Rewrite now</b> to try again.");notify("Claude could not write the note; the draft was saved instead.");_save();return}
+   if(n>360){qvStatus("<b>Claude did not finish in 90 seconds;</b> the draft note was saved. Press Rewrite now to try again.");_save();return}setTimeout(tick,250)};setTimeout(tick,600)}}
+/* 3. offline writer: no duplicated sentences, no free speech in the opening */
+const QN_SPEECH=/\b(?:busy today|came today|presented today|visited today|today with his|today with her|complaining of|complains of|he complains|she complains|but he|but she|could be|was found|were found|samples were)\b/i;
+function qnCleanOpening(s){let t=String(s||"");
+ t=t.replace(/\b(?:busy|came|presented|visited|arrived) today with (his|her) (father|mother|wife|husband|son|daughter|brother|sister|friend|family|parents)\b,?\s*/i,"").replace(/\b(?:accompanied by (?:his|her) \w+),?\s*/i,"");
+ t=t.replace(/\b(?:complaining of|complains of|c\/o)\s+/gi,"").replace(/\bbut (?:he|she) complains of no\b.*$/i,"").replace(/\bof no the\b.*$/i,"").trim();
+ return t}
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{
+  /* duplicated sentences anywhere in the note */
+  const seen=new Set();B.L=B.L.filter(([t,k])=>{if(!t||k==="h")return true;const key=t.toLowerCase().replace(/\W+/g," ").trim();if(seen.has(key))return false;seen.add(key);return true});
+  /* opening sentence: strip free speech, keep the complaint */
+  const i=B.L.findIndex(([t,k])=>k!=="h"&&/\bpresented today with\b/i.test(t||""));if(i>=0){let t=B.L[i][0];const m=t.match(/^(.*?\bpresented today with )(.*)$/i);if(m&&QN_SPEECH.test(m[2])){const comp=qnCleanOpening(m[2]);if(comp)t=m[1]+comp;else t=m[1].replace(/ with $/," ")+"a complaint that was not understood from the dictation (please correct the shorthand).";B.L[i][0]=t}
+   /* "with his father" in the dictation → accompanied by */
+   const raw=$("qnIn").value;const am=raw.match(/\b(?:with|by) (his|her) (father|mother|wife|husband|son|daughter|brother|sister|parents)\b/i);if(am&&!/accompanied/i.test(B.L[i][0]))B.L[i][0]=B.L[i][0].replace(/^(A \d+-year-old (?:male|female|boy|girl|man|woman))/,`$1, accompanied by ${am[1]} ${am[2]},`)}
+  /* history lines that are plainly garbled speech and carry no parsed fact */
+  B.L=B.L.filter(([t,k])=>{if(!t||k==="h")return true;return !/\b(?:of no the|samples were found around|could be cullens inside|the or\.|pain gets worse injection with it)\b/i.test(t)});
+ }catch(e){}return B}}
+/* 4. dictation phrases normalized before parsing */
+{const _pre=qnPre;qnPre=function(s){let t=String(s||"");
+  t=t.replace(/\b(?:busy|came|presented|visited|arrived|come|coming) today\b,?\s*/gi,"").replace(/\b(?:with|by|and) (?:his|her) (?:father|mother|wife|husband|son|daughter|brother|sister|parents|family|friend)\b,?\s*/gi,"")
+   .replace(/\b(?:the )?symptoms? (?:started|began|start) (\d+) (hours?|days?|weeks?|months?) ago\b/gi,"for $1 $2")
+   .replace(/\bpain (?:score |is |of )?(\d{1,2})\s*(?:\/|out of|over)\s*10\b/gi,"severity $1/10").replace(/\b(\d{1,2})\s*(?:\/|out of|over)\s*10 pain\b/gi,"severity $1/10")
+   .replace(/,\s*for (\d+ (?:hours?|days?|weeks?|months?))\b/gi," for $1").replace(/\bfor further assessment\b/gi,"").replace(/\bbloods? (?:were |was )?taken\b/gi,"blood tests sent").replace(/\binvestigations? (?:were |was )?taken\b/gi,"blood tests sent");
+  return _pre(t)}}
+/* 5. dictation clean-up: repeated passages (recognizer restarts), "he denies X or Y" → "no X, no Y", garbled fragments removed and shown as a flag instead of being written into the note */
+let QN_DROPPED=[];
+const QN_GARBLE=[/\bwith it was given to the patient\b/i,/\bsamples? were found around\b/i,/\bcould be \w+ inside\b/i,/\bcomplains of no\b/i,/\bof no the\b/i,/\bthe or\b/i,/\bpain is out\b/i,/\bno recent test\b/i];
+function qnDictClean(raw){let t=String(raw||"").replace(/\r/g,"");QN_DROPPED=[];
+ t=t.replace(/([a-z])\.(?=\d)/gi,"$1. ").replace(/\.(?=[A-Za-z])/g,". ");
+ /* repeated passages: the same sentence twice (allowing small recognition differences) */
+ const parts=t.split(/(?<=[.!?])\s+|\n+/);const keep=[];const norm=s=>s.toLowerCase().replace(/\b(?:the|or|of|no|a|an|and)\b/g," ").replace(/[^a-z0-9]+/g," ").trim();
+ for(const s of parts){const n=norm(s);if(!n)continue;if(keep.some(k=>{const kn=norm(k);return kn===n||(n.length>25&&(kn.includes(n)||n.includes(kn)))}))continue;keep.push(s)}t=keep.join(" ");
+ /* speech forms */
+ t=t.replace(/\b(?:he|she|the patient|patient) denies (?:any |a )?([^.,;]+?)(?=[.,;]|$)/gi,(m,x)=>x.split(/\s*(?:,|\bor\b|\band\b|\bnor\b)\s*/).filter(Boolean).map(y=>"no "+y.trim()).join(", "))
+  .replace(/\bbut (?:he|she) complains of no,? ?(?:the )?symptoms? (?:started|began) (\d+) (hours?|days?|weeks?) ago\b/gi,"for $1 $2").replace(/\b(?:the )?symptoms? (?:started|began) (\d+) (hours?|days?|weeks?) ago\b/gi,"for $1 $2")
+  .replace(/\bpain is out (\d{1,2}) out of 10\b/gi,"severity $1/10").replace(/\bfever the or\b/gi,"fever or")
+  .replace(/\bpain gets worse injection with it was given to the patient\b/gi,()=>{QN_DROPPED.push("the name of the injected medicine (\"pain gets worse injection with it was given\")");return ". an unnamed injection was given. "}).replace(/\binvestigations? (?:were |was )?taken\b/gi,". blood tests sent. ")
+  .replace(/\bthe general surgery was contacted\b/gi,"general surgery contacted").replace(/\b(\w+) was contacted for further assessment\b/gi,"$1 contacted. ").replace(/\bcontacted for further assessment\b/gi,"contacted. ")
+  .replace(/\bpain previously no recent test trauma\b/gi,"no recent trauma").replace(/\bno recent test trauma\b/gi,"no recent trauma");
+ t=t.replace(/\bsamples were found around this could be cullens inside\b\.?/gi,()=>{QN_DROPPED.push("could be Cullen's sign (not understood)");return ". "});
+ /* fragments still unreadable: cut from the start of the garble to the end of that sentence, shown as a flag */
+ QN_GARBLE.forEach(re=>{t=t.replace(new RegExp(re.source+"[^.;]*[.;]?","gi"),m=>{QN_DROPPED.push(m.trim().replace(/[.;]$/,""));return ". "})});
+ /* no sex said: "he/his" → male, "she/her" → female */
+ if(/^\s*\d{1,3}\s*(?:-|\s)?(?:year|yr|y)/i.test(t)&&!/^\s*\d{1,3}[^.,]{0,25}\b(?:male|female|m|f|boy|girl|man|woman|lady|gentleman)\b/i.test(t)){if(/\b(?:he|his|him)\b/i.test(t))t=t.replace(/^(\s*\d{1,3}\s*(?:-|\s)?(?:year|yr|y)(?:ear)?s?(?:-|\s)?old)\b/i,"$1 male");else if(/\b(?:she|her)\b/i.test(t))t=t.replace(/^(\s*\d{1,3}\s*(?:-|\s)?(?:year|yr|y)(?:ear)?s?(?:-|\s)?old)\b/i,"$1 female")}
+ /* a duration said on its own joins the complaint */
+ const dm=t.match(/(?:^|[.,;]\s*)(for \d+ (?:hours?|days?|weeks?|months?))(?=\s*[.,;]|$)/i);if(dm){const first=t.split(/[.;]/)[0];if(!/\bfor \d+ (?:hours?|days?|weeks?|months?)\b|\bsince\b|\bago\b/i.test(first)){t=t.replace(dm[0],dm[0].startsWith("for")?"":dm[0][0]+" ");t=t.replace(/^([^.;]*?)(\s*[.;])/,(m,a,b)=>a.replace(/,\s*$/,"")+" "+dm[1]+b)}}
+ /* a pain score said on its own joins the complaint too */
+ const sm=t.match(/(?:^|[.,;]\s*)(severity \d{1,2}\/10)(?=\s*[.,;]|\s|$)/i);if(sm){const first=t.split(/[.;]/)[0];if(!/severity \d/i.test(first)){t=t.replace(sm[0],sm[0].startsWith("severity")?"":sm[0][0]+" ");t=t.replace(/^([^.;]*?)(\s*[.;])/,(m,a,b)=>a.replace(/,\s*$/,"")+", "+sm[1]+b)}}
+ return t.replace(/\s*\.\s*\.\s*/g,". ").replace(/\s{2,}/g," ").replace(/\s+([.,;])/g,"$1").trim()}
+{const _pre=qnPre;qnPre=function(s){return _pre(qnDictClean(s))}}
+{const _r=qnRun;qnRun=function(){_r();try{if(QN_DROPPED.length&&$("qnIn").value.trim()){$("qnFlags").insertAdjacentHTML("beforeend",`<div class="alert amber" data-drop="1"><b>Not understood from the dictation (left out of the note; correct the shorthand if it matters):</b> ${esc(QN_DROPPED.join(" | "))}</div>`)}}catch(e){}}}
+/* the parsed record keeps the cleaned dictation as the user's text, so later passes never restore garbled fragments */
+{const _q=qnParse;qnParse=function(raw){const o=_q(raw);try{if(o&&o.rawUser){const d=QN_DROPPED.slice();o.rawUser=qnDictClean(o.rawUser);QN_DROPPED=d}}catch(e){}return o}}
+/* the unnamed injection is written as a red line asking for the medicine name */
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{B.L.forEach(z=>{if(z[0]==="An unnamed injection was given."){z[0]="An injection was given (medicine name not understood from the dictation: please correct).";z[1]="pos"}})}catch(e){}return B}}
+/* p181 — disposition is written only when it was said (or chosen): no "discharged home", follow-up or return advice by default */
+{const sel=$("qnDsp");if(sel&&!sel.querySelector('option[value="none"]')){sel.insertAdjacentHTML("afterbegin",'<option value="none">not stated (leave it out)</option>');sel.value="none"}}
+if(typeof DSP_TXT!=="undefined")DSP_TXT.none="NOT STATED: write no disposition, no discharge, no follow-up and no return advice; leave the DISPOSITION section empty (keep only a line that disposition is as per the specialist's review when a specialist was contacted)";
+const QN_DSP_RAW=[["dis",/\b(?:d\/c|dc|discharg\w*|sent home|go home|went home|home with|home on)\b/i],["adm",/\badmit\w*/i],["lama",/\blama\b|\bleft against\b|\bdama\b/i]];
+function qnDspFromRaw(raw){const r=String(raw||"").toLowerCase();for(const [v,re] of QN_DSP_RAW)if(re.test(r))return v;return "none"}
+{const _o=qnOpt;qnOpt=function(){const opt=_o();try{if(opt.dsp==="none"){const d=qnDspFromRaw($("qnIn").value);opt.dsp="dis";opt.dspNone=d==="none"}}catch(e){}return opt}}
+/* the rule-based note: when disposition was not stated the DISPOSITION section loses the discharge, advice and return lines, and the family-medicine line goes unless it was said */
+{const _b=qnBuild;qnBuild=function(o,opt){if(opt&&opt.dspNone)opt=Object.assign({},opt,{dsp:"dis"});const B=_b(o,opt);try{if(!opt||!opt.dspNone)return B;
+  const L=B.L;let sec="";B.L=L.filter(([t,k])=>{if(k==="h"){sec=t;return true}if(sec==="DISPOSITION"){if(!t)return true;if(k==="ret"||/^Advised\b|^The patient was advised\b/i.test(t))return false;if(/^The patient was discharged\b|^Discharged\b/i.test(t))return false;return true}
+   if(sec==="DISCUSSION AND REFERRAL"&&/follow up with family medicine/i.test(t||"")&&!o.fm)return false;return true});
+  B.ret="";if(B.adv)B.adv="";
+  /* an empty DISPOSITION section (heading only) is removed */
+  const hi=B.L.findIndex(z=>z[1]==="h"&&z[0]==="DISPOSITION");if(hi>=0){const rest=B.L.slice(hi+1);const next=rest.findIndex(z=>z[1]==="h");const body=(next<0?rest:rest.slice(0,next)).filter(z=>z[0]);if(!body.length)B.L.splice(hi-(B.L[hi-1]&&!B.L[hi-1][0]?1:0),(next<0?rest.length:next)+1+(B.L[hi-1]&&!B.L[hi-1][0]?1:0))}
+ }catch(e){}return B}}
+/* the Claude note: the same filter */
+if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){const B=_t(J);try{const opt=qnOpt();if(!opt.dspNone)return B;let sec="";B.L=B.L.filter(([t,k])=>{if(k==="h"){sec=t;return true}if(sec==="DISPOSITION"){if(!t)return true;if(k==="ret"||/^Advised\b|^The patient was advised\b/i.test(t))return false;if(/^The patient was discharged\b|^Discharged\b/i.test(t))return false;return true}if(sec==="DISCUSSION AND REFERRAL"&&/follow up with family medicine/i.test(t||"")&&!/family med|\bfm\b|\bgp\b/i.test($("qnIn").value))return false;return true});B.ret="";
+  const hi=B.L.findIndex(z=>z[1]==="h"&&z[0]==="DISPOSITION");if(hi>=0){const rest=B.L.slice(hi+1);const next=rest.findIndex(z=>z[1]==="h");const body=(next<0?rest:rest.slice(0,next)).filter(z=>z[0]);if(!body.length)B.L.splice(hi,(next<0?rest.length:next)+1)}}catch(e){}return B}}
+/* a reminder under the note */
+{const _r=qnRun;qnRun=function(){_r();try{const opt=qnOpt();if(opt.dspNone&&$("qnIn").value.trim()&&!$("qnFlags").querySelector("[data-dsp]"))$("qnFlags").insertAdjacentHTML("beforeend",'<div class="alert info" data-dsp="1">Disposition not stated: nothing about discharge, follow-up or return advice is written. Type "d/c", "admitted" or "lama" in the shorthand, or choose one in Disposition.</div>')}catch(e){}}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
