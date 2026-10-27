@@ -17987,7 +17987,7 @@ function qnCleanOpening(s){let t=String(s||"");
   /* opening sentence: strip free speech, keep the complaint */
   const i=B.L.findIndex(([t,k])=>k!=="h"&&/\bpresented today with\b/i.test(t||""));if(i>=0){let t=B.L[i][0];const m=t.match(/^(.*?\bpresented today with )(.*)$/i);if(m&&QN_SPEECH.test(m[2])){const comp=qnCleanOpening(m[2]);if(comp)t=m[1]+comp;else t=m[1].replace(/ with $/," ")+"a complaint that was not understood from the dictation (please correct the shorthand).";B.L[i][0]=t}
    /* "with his father" in the dictation → accompanied by */
-   const raw=$("qnIn").value;const am=raw.match(/\b(?:with|by) (his|her) (father|mother|wife|husband|son|daughter|brother|sister|parents)\b/i);if(am&&!/accompanied/i.test(B.L[i][0]))B.L[i][0]=B.L[i][0].replace(/^(A \d+-year-old (?:male|female|boy|girl|man|woman))/,`$1, accompanied by ${am[1]} ${am[2]},`)}
+   const raw=$("qnIn").value;const am=raw.match(/\b(?:with|by) (his|her) (father|mother|wife|husband|son|daughter|brother|sister|parents)\b/i);if(am&&!/accompanied/i.test(B.L[i][0]))B.L[i][0]=B.L[i][0].replace(/^(An? \d+-(?:year|month|week|day)-old (?:male|female|boy|girl|man|woman))/,`$1, accompanied by ${am[1]} ${am[2]},`)}
   /* history lines that are plainly garbled speech and carry no parsed fact */
   B.L=B.L.filter(([t,k])=>{if(!t||k==="h")return true;return !/\b(?:of no the|samples were found around|could be cullens inside|the or\.|pain gets worse injection with it)\b/i.test(t)});
  }catch(e){}return B}}
@@ -18098,7 +18098,7 @@ if(typeof VOICE_FIX!=="undefined")VOICE_FIX.push(...QN_MISHEARD.filter(x=>typeof
    B.L[i][0]=B.L[i][0].replace(/\bpresented today with (?:patient |the patient )?(?:complaining of|complains of|c\/o)?\s*\.?$/i,guess.length?"presented today with "+(typeof joinAnd==="function"?joinAnd(guess):guess.join(", "))+".":"presented today with a complaint that was not understood from the dictation (please correct the shorthand).")}
   /* copied dictation of 10 words or more (dictated text only) */
   if(!QN_DICTATED)return B;const rawN=" "+String(o.rawUser||o.raw||"").toLowerCase().replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ")+" ";
-  B.L=B.L.filter(([t,k])=>{if(!t||k==="h"||k==="neg"||k==="ret"||k==="adv")return true;if(/^An? \d+-(?:year|month|week|day)-old\b|^Advised\b|^The patient was advised\b|^Impression:|^Past medical history:|^Mechanism of injury:/.test(t))return true;
+  B.L=B.L.filter(([t,k])=>{if(!t||k==="h"||k==="neg"||k==="ret"||k==="adv")return true;if(/^An? \d+-(?:year|month|week|day)-old\b|^Advised\b|^The patient was advised\b|^Impression:|^Past medical history:|^Mechanism of injury:|^The (?:mother|father|parents|patient) reports?\b/.test(t))return true;
    const ws=t.toLowerCase().replace(/[^a-z0-9 ]/g," ").split(/\s+/).filter(Boolean);if(ws.length<10)return true;let g=0,hit=0;for(let j=0;j+4<=ws.length;j++){g++;if(rawN.includes(" "+ws.slice(j,j+4).join(" ")+" "))hit++}
    if(g&&hit/g>=0.5){QN_DROPPED.push(t.replace(/\.$/,""));return false}return true});
   /* composed negatives that swallowed garbled words ("Not stiffness no skin rush not running nose this is ...") */
@@ -18118,5 +18118,40 @@ if(typeof QN_MISHEARD!=="undefined")QN_MISHEARD.push([/\bbottom of the moon\b/gi
  }catch(e){}return t.replace(/\s{2,}/g," ").replace(/\.\s*\./g,".")}}
 /* leftover single words from the narrative reader ("Which.") never reach the note */
 {const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{B.L=B.L.filter(([t,k])=>!(t&&k!=="h"&&/^(?:which|and|but|so|then|also|the|he|she|it|that|with|of)\.?$/i.test(t.trim())))}catch(e){}return B}}
+/* p184 — toddler dictation: age repeated inside the complaint, "changing and feeding and sleeping pattern", the mother's report, "congressional", lethargy impression instead of "fever" */
+if(typeof QN_MISHEARD!=="undefined")QN_MISHEARD.push([/\bcongressional\b/gi,"seizures"],[/\bchang(?:e|es|ing) (?:and|in|of) feeding and sleeping pattern\b/gi,"change in feeding and sleeping pattern"],[/\bsmall lethargic\b/gi,"somewhat lethargic"],[/\bno fever any further symptoms\b/gi,"no fever, no further symptoms"],[/\b(?:she|he|the mother|the father|mother|father) says? that (?:her|his|the) child (?:becomes|became|has become|is)\b/gi,"the mother reports that the child has become"],[/\blethargic is not playful\b/gi,"lethargic and is not playful"],[/\bpresented today with at \d+ (?:months?|years?) old\b/gi,"presented today with"],[/\bwith at (\d+) (?:months?|years?) old\b/gi,"with"]);
+{const _c=qnDictClean;qnDictClean=function(raw){let t=_c(raw);try{
+  t=t.replace(/^(\s*\d{1,3}\s*(?:-|\s)?(?:month|year|week)s?(?:-|\s)?old (?:male|female|boy|girl|patient|child|baby)?)\s*(?:,|\s)?\s*at \d+ (?:months?|years?) old\b/i,"$1");
+  t=t.replace(/\bbrought (?:in )?(?:by|with) (?:his|her|the) (?:mother|father|parents|family)\b,?\s*/gi,"").replace(/\bbrought\s+(?=at \d+ (?:months?|years?) old|c\/o|with|change)/gi,"").replace(/\bat \d+ (?:months?|years?) old\b\s*/gi,"");
+  t=t.replace(/\bthe mother reports that the child has become ([^.;]+?)(?=[.;]|$)/gi,(m,x)=>". the mother reports that the child has become "+x.trim()+".");
+ }catch(e){}return t.replace(/\s{2,}/g," ").replace(/\.\s*\./g,".")}}
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{const raw=String(o.rawUser||o.raw||"").toLowerCase();
+  const leth=/\blethargic|lethargy|not playful|less active|off feeds?|poor feeding|change in feeding\b/.test(raw)&&!/\bno (?:lethargy|lethargic)\b/.test(raw);
+  const fevNeg=/\bno fever\b|\bafebrile\b/.test(raw)&&!/\bfever (?:for|up to|of|since)\b|\bfebrile\b/.test(raw.replace(/\bno fever\b|\bafebrile\b/g,""));
+  let ii=B.L.findIndex(z=>/^Impression:/.test(z[0]||""));
+  if(ii<0&&leth){const inv=B.L.findIndex(z=>z[1]==="h"&&/^(?:INVESTIGATIONS|MANAGEMENT|DISCUSSION AND REFERRAL|DISPOSITION)$/.test(z[0]));const at=inv>=0?inv:B.L.length;B.L.splice(at,0,["",""],["ASSESSMENT","h"],["Impression: Fever, likely viral illness.","pos"]);ii=at+2}
+  if(ii>=0&&leth&&(fevNeg||/^Impression: Fever, likely viral illness\.$/.test(B.L[ii][0]))){B.L[ii][0]="Impression: Lethargy with a change in feeding and sleeping pattern in a toddler; serious bacterial infection, dehydration and metabolic causes to be excluded.";B.L[ii][1]="pos";
+   const ex=B.L.findIndex(z=>z[1]==="h"&&z[0]==="EXAMINATION");if(ex>=0&&!B.L.some(z=>/\bcapillary refill\b/i.test(z[0]||"")))B.L.splice(ex+1,0,["Full set of vital signs including temperature, heart rate, respiratory rate, SpO2, capillary refill and blood glucose to be documented.","pos"])}
+  /* "Fever, likely viral illness" never stands when fever was denied */
+  if(ii>=0&&fevNeg&&/^Impression: Fever/.test(B.L[ii][0])&&!leth)B.L[ii][0]="Impression: To be completed (no fever reported).";
+ }catch(e){}return B}}
+/* "no seizures, no fever" is not an afebrile seizure */
+{const _a=qnAfOn;qnAfOn=function(c){return _a(c)&&/(?<!\b(?:no|not|denies|without|nor)\s)\b(?:seizures?|convulsions?|fits?), no fever\b/.test(c.rp)}}
+/* the parent's account is kept in the history */
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{const raw=String(o.rawUser||o.raw||"");const m=raw.match(/\bthe (mother|father|parents) reports? that ([^.;]+)/i);
+  if(m&&!B.L.some(z=>/\breports? that\b/i.test(z[0]||""))){const op=B.L.findIndex(z=>z[1]!=="h"&&/\bpresented today\b/.test(z[0]||""));const line=`The ${m[1].toLowerCase()} report${m[1].toLowerCase()==="parents"?"":"s"} that ${m[2].trim().replace(/\band and\b/g,"and")}.`;B.L.splice(op>=0?op+1:1,0,[line,"pos"])}}catch(e){}return B}}
+/* p185 — disposition not stated: nothing about discharge, follow-up or return advice anywhere in the note (Claude or rule-based), whatever section it was put in */
+const QN_DSP_LINE=/\b(?:was discharged|discharged home|discharge home|plan is discharge|planned for discharge|to be discharged|follow[- ]?up with family medicine|outpatient follow|return immediately|advised to return|return to the ed|come back if|safety[- ]net\w*|sent home|go home)\b/i;
+function qnDspStrip(B,raw){const r=String(raw||"").toLowerCase();if(qnDspFromRaw(r)!=="none")return B;
+ const keepRef=/\b(?:clinic|refer\w*|e-?referral|contact\w*|review)\b/i.test(r);
+ B.L.forEach(z=>{if(z[0]&&z[1]!=="h"&&z[1]!=="neg"&&z[1]!=="ret"&&z[1]!=="dis"&&/\. /.test(z[0])&&QN_DSP_LINE.test(z[0])&&!/\bas per\b.*\breview\b/i.test(z[0])){z[0]=z[0].split(/(?<=\.)\s+/).filter(s=>!QN_DSP_LINE.test(s)).join(" ")}});
+ B.L=B.L.filter(([t,k])=>{if(!t||k==="h"||k==="neg")return true;if(/\bas per\b.*\breview\b|\bawait/i.test(t))return true;if(k==="ret")return false;if(k==="dis")return !/^(?:The patient was discharged|Discharged)\b/i.test(t);if(keepRef&&/\b(?:clinic|referr\w*|e-?referral|contacted)\b/i.test(t)&&!/\bdischarg/i.test(t))return true;return !QN_DSP_LINE.test(t)});
+ B.ret="";if(B.adv)B.adv="";
+ /* empty sections left behind are removed */
+ for(let i=B.L.length-1;i>=0;i--){if(B.L[i][1]==="h"){let j=i+1,body=0;while(j<B.L.length&&B.L[j][1]!=="h"){if(B.L[j][0])body++;j++}if(!body&&/^(?:DISPOSITION|DISCUSSION AND REFERRAL|MANAGEMENT|INVESTIGATIONS)$/.test(B.L[i][0])){B.L.splice(i,j-i);if(i>0&&!B.L[i-1][0])B.L.splice(i-1,1)}}}
+ return B}
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{if(opt&&opt.dspNone)qnDspStrip(B,$("qnIn").value)}catch(e){}return B}}
+if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){const B=_t(J);try{const opt=qnOpt();if(opt.dspNone)qnDspStrip(B,$("qnIn").value)}catch(e){}return B}}
+{const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){let s=_p(raw,opt,draft);if(opt&&opt.dspNone)s=s.replace("RULES\n",'RULES\n0f. DISPOSITION NOT STATED: the doctor has not decided yet. Write NOTHING about discharge, going home, follow-up, outpatient review, safety netting or return advice, in any section. The MANAGEMENT section holds only what was done; the DISPOSITION section is left empty; "ret" is an empty string.\n');return s}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
