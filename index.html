@@ -17973,7 +17973,7 @@ function tgBarHide(){const bar=$("tgBar");if(bar)bar.hidden=true;TG.pending=null
 {const _save=qvSaveNow;qvSaveNow=function(){if(!(typeof QAI!=="undefined"&&QAI.on&&qaiProv()))return _save();
   qvStatus("<b>Writing the final note…</b> it will be saved when the check is finished.");let tries=0;const start=()=>{tries++;try{qaiRun(true)}catch(e){}};start();
   let n=0;const tick=()=>{n++;if(!QAI.busy&&QAI.B){qaiShow();_save();return}
-   if(!QAI.busy&&!QAI.B){if(tries<2){qvStatus("<b>Claude did not answer; trying once more…</b>");start();setTimeout(tick,800);return}qvStatus("<b>Claude could not write this note</b> ("+($("qaiSt")?$("qaiSt").textContent:"")+"). The draft was saved; press <b>Rewrite now</b> to try again.");notify("Claude could not write the note; the draft was saved instead.");_save();return}
+   if(!QAI.busy&&!QAI.B){if(tries<2){qvStatus("<b>Claude did not answer; trying once more…</b>");start();setTimeout(tick,800);return}qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved; press <b>Rewrite now</b> to try again.");notify("Claude could not write the note; the draft was saved instead.");_save();return}
    if(n>360){qvStatus("<b>Claude did not finish in 90 seconds;</b> the draft note was saved. Press Rewrite now to try again.");_save();return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* 3. offline writer: no duplicated sentences, no free speech in the opening */
 const QN_SPEECH=/\b(?:busy today|came today|presented today|visited today|today with his|today with her|complaining of|complains of|he complains|she complains|but he|but she|could be|was found|were found|samples were)\b/i;
@@ -18153,5 +18153,27 @@ function qnDspStrip(B,raw){const r=String(raw||"").toLowerCase();if(qnDspFromRaw
 {const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{if(opt&&opt.dspNone)qnDspStrip(B,$("qnIn").value)}catch(e){}return B}}
 if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){const B=_t(J);try{const opt=qnOpt();if(opt.dspNone)qnDspStrip(B,$("qnIn").value)}catch(e){}return B}}
 {const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){let s=_p(raw,opt,draft);if(opt&&opt.dspNone)s=s.replace("RULES\n",'RULES\n0f. DISPOSITION NOT STATED: the doctor has not decided yet. Write NOTHING about discharge, going home, follow-up, outpatient review, safety netting or return advice, in any section. The MANAGEMENT section holds only what was done; the DISPOSITION section is left empty; "ret" is an empty string.\n');return s}}
+/* p186 — Claude writer robustness: longer answers allowed (max_tokens 8000), truncated or non-JSON replies retried once with a "JSON only" reminder, the real reason shown in the status, JSON repaired when a trailing comma or text sneaks in */
+{const _call=qaiCall;qaiCall=async function(prompt,signal){if(QAI.sample){const r=await QAI.sample(prompt,{modelTier:"default",signal,cache:false});if(r&&r.truncated)throw {code:"truncated",message:"the answer was cut short"};return r.text}
+ if(QAI.key){const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal,headers:{"content-type":"application/json","x-api-key":QAI.key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:"claude-sonnet-5-5",max_tokens:8000,messages:[{role:"user",content:prompt}]})});
+  if(!res.ok){let t="";try{t=await res.text()}catch(e){}let msg=t.slice(0,240);try{const j=JSON.parse(t);msg=(j.error&&j.error.message)||msg}catch(e){}throw {code:"http_"+res.status,message:msg}}const j=await res.json();if(j.stop_reason==="max_tokens")throw {code:"truncated",message:"the answer was cut short"};return (j.content||[]).map(c=>c.text||"").join("")}
+ return _call(prompt,signal)}}
+function qaiJson(txt){const m=String(txt||"").match(/\{[\s\S]*\}/);if(!m)return null;let s=m[0];try{return JSON.parse(s)}catch(e){}
+ s=s.replace(/,\s*([}\]])/g,"$1").replace(/[“”]/g,'"');try{return JSON.parse(s)}catch(e){}
+ /* cut at the last complete line object and close the structure */
+ const cut=s.lastIndexOf('"}');if(cut>0){let t=s.slice(0,cut+2);const open=(t.match(/\[/g)||[]).length-(t.match(/\]/g)||[]).length;const ob=(t.match(/\{/g)||[]).length-(t.match(/\}/g)||[]).length;t+="]".repeat(Math.max(0,open))+"}".repeat(Math.max(0,ob));try{return JSON.parse(t)}catch(e){}}return null}
+{const _run=qaiRun;qaiRun=async function(force){if(!QAI.on&&!force)return;if(!qaiProv()){return _run(force)}
+ const raw=$("qnIn").value.trim();if(!raw)return;const opt=qnOpt(),sig=JSON.stringify([raw,opt]);if(!force&&sig===QAI.sig&&QAI.B)return;
+ if(QAI.ctl)QAI.ctl.abort();QAI.ctl=new AbortController();QAI.busy=true;QAI.sig=sig;const draft=qnLast?qnText(qnLast.B):"";const myRun=(QAI.run=(QAI.run||0)+1);const stale=()=>myRun!==QAI.run;
+ qaiStatus('<span class="sumThink"><i></i><i></i><i></i></span> Claude is writing the note…','wait');$("qnOut").style.opacity=".55";
+ try{let prompt=qaiPrompt(raw,opt,draft);let J=null,lastErr=null;
+  for(let attempt=0;attempt<2&&!J;attempt++){try{const txt=await qaiCall(prompt,QAI.ctl.signal);J=qaiJson(txt);if(!J){lastErr={code:"parse",message:"Claude did not return the note format"};prompt+="\n\nREMINDER: answer with the JSON object only, complete, no commentary."}}
+   catch(e){lastErr=e;if(e&&(e.name==="AbortError"||e.code==="cancelled"||e.code==="not_granted"||e.code==="rate_limited"||/^http_4/.test(e.code||"")))throw e;if(e&&e.code==="truncated")prompt+="\n\nREMINDER: keep every line short so the whole JSON fits; answer with the JSON object only."}
+   if(stale())return}
+  if(!J)throw lastErr||{code:"parse",message:"no note"};
+  if(stale())return;const B=qaiToB(J);if($("qnIn").value.trim()!==raw){qaiSchedule(400);return}QAI.B=B;qaiShow();qaiStatus("✓ Note written by Claude from your shorthand. Review it before pasting into Epic.","ok")}
+ catch(e){if(stale()||(e&&(e.name==="AbortError"||e.code==="cancelled")))return;QAI.B=null;$("qnOut").style.opacity="";const c=e&&e.code||"";const why=e&&e.message?String(e.message).slice(0,160):"";
+  qaiStatus(c==="not_granted"?"Permission for Claude was declined: the rule-based draft is shown.":c==="rate_limited"?"Claude is busy (rate limit): try Rewrite now in a minute. The rule-based draft is shown.":/^http_401/.test(c)?"The API key was rejected (401). Check it in AI settings.":/^http_4(?:02|29)/.test(c)?"The API account has no credit or hit its limit ("+esc(why)+").":/^http_/.test(c)?`The AI service returned an error (${esc(c)}: ${esc(why)}). The rule-based draft is shown.`:c==="truncated"?"Claude's answer was cut short twice: the rule-based draft is shown. Press Rewrite now.":c==="parse"?"Claude answered in the wrong format twice: the rule-based draft is shown. Press Rewrite now.":/fetch|network/i.test(why)?"Could not reach the AI service (network or hospital firewall). The rule-based draft is shown.":"Claude could not write this note ("+esc(why||c||"unknown reason")+"): the rule-based draft is shown.","err")}
+ finally{if(!stale())QAI.busy=false}}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
