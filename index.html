@@ -17938,7 +17938,7 @@ function tgFromHtml(html){let s=String(html||"");
  const _add=qnAdd;qnAdd=function(text,html,src){const before=qnLoad().length;const r=_add(text,html,src);try{if(src!=="quick"||!TG.auto||!tgReady())return r;const body=tgFromHtml(html);if(!body||body===A.sent)return r;
   const isUpdate=qnLoad().length===before&&!!A.sent;clearTimeout(A.tm);
   const go=()=>{A.sent=body;tgSend((isUpdate?"<b>Updated note</b>\n\n":"")+body)};
-  if(isUpdate)A.tm=setTimeout(go,15000);else go()}catch(e){}return r}
+  if(isUpdate)A.tm=setTimeout(go,5000);else go()}catch(e){}return r}
  /* a new patient starts a new thread of messages */
  const _run=typeof qnRun==="function"?qnRun:null;document.addEventListener("click",e=>{const b=e.target.closest("#qnClear,#newPatient,[data-new]");if(b){A.id=null;A.sent=""}},true);
  const box=$("tgSet");if(box){box.querySelector(".btns").insertAdjacentHTML("afterend",`<label class="mini" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="tgAuto"${TG.auto?" checked":""}> Send every saved note to Telegram automatically (say "save" or press Save note)</label>`);
@@ -18175,5 +18175,489 @@ function qaiJson(txt){const m=String(txt||"").match(/\{[\s\S]*\}/);if(!m)return 
  catch(e){if(stale()||(e&&(e.name==="AbortError"||e.code==="cancelled")))return;QAI.B=null;$("qnOut").style.opacity="";const c=e&&e.code||"";const why=e&&e.message?String(e.message).slice(0,160):"";
   qaiStatus(c==="not_granted"?"Permission for Claude was declined: the rule-based draft is shown.":c==="rate_limited"?"Claude is busy (rate limit): try Rewrite now in a minute. The rule-based draft is shown.":/^http_401/.test(c)?"The API key was rejected (401). Check it in AI settings.":/^http_4(?:02|29)/.test(c)?"The API account has no credit or hit its limit ("+esc(why)+").":/^http_/.test(c)?`The AI service returned an error (${esc(c)}: ${esc(why)}). The rule-based draft is shown.`:c==="truncated"?"Claude's answer was cut short twice: the rule-based draft is shown. Press Rewrite now.":c==="parse"?"Claude answered in the wrong format twice: the rule-based draft is shown. Press Rewrite now.":/fetch|network/i.test(why)?"Could not reach the AI service (network or hospital firewall). The rule-based draft is shown.":"Claude could not write this note ("+esc(why||c||"unknown reason")+"): the rule-based draft is shown.","err")}
  finally{if(!stale())QAI.busy=false}}}
+/* p187 — past medical history and regular medications in red when present; "No past medical history" and "Not on regular medications" stay in the normal color */
+const C3_PMH_POS=/^(?:Past medical history|Past surgical history|Known case of|Known to have|Background|Comorbidities)\s*:?\s*(?!(?:none|nil|no |not )).+|^(?:He|She|The patient) (?:is a known case of|has a history of|has a past history of|is known to have)\b|^(?:On regular medications?|Regular medications?|Medications?|Current medications?)\s*:\s*(?!(?:none|nil|no |not )).+|^(?:He|She|The patient) (?:takes|is on|is taking)\b/i;
+const C3_PMH_NEG=/^(?:No past medical history|No past surgical history|Not on regular medications?|No regular medications?|No known (?:drug )?allergies|No medications?)\b/i;
+function c3PmhSplit(t){/* a combined line: "No past medical history. Not on regular medications." mixed with positives is colored sentence by sentence */
+ return String(t).split(/(?<=\.)\s+/).map(s=>C3_PMH_NEG.test(s)?c3span("b",s):C3_PMH_POS.test(s)?c3span("r",s):null)}
+{const _l=c3Line;c3Line=function(t,k,sec,age){try{const S=String(sec||"").toUpperCase();if(/^HISTORY/.test(S)&&(C3_PMH_POS.test(t)||/\. (?:Past medical history|On regular medications?|Medications?):/i.test(t))){const parts=c3PmhSplit(t);if(parts.every(Boolean))return parts.join(" ")}}catch(e){}return _l(t,k,sec,age)}}
+/* the rule-based writer marks these lines as positives so the Telegram/Epic copies carry the red */
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{B.L.forEach(z=>{if(z[0]&&z[1]!=="h"&&C3_PMH_POS.test(z[0])&&!C3_PMH_NEG.test(z[0]))z[1]="pos"})}catch(e){}return B}}
+{const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n",'RULES\n0g. Past medical history and regular medications: when present, write them as their own lines starting "Past medical history: …" and "On regular medications: …" with kind "pos" (they are shown in red). "No past medical history" and "Not on regular medications" are kind "plain".\n')}}
+/* "no pmh, d/c" must not leave a "Past medical history: and discharged." line */
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{B.L=B.L.filter(([t,k])=>!(t&&/^(?:Past medical history|Regular medications?|On regular medications?):\s*(?:and |or |, )?(?:discharged|admitted|d\/c|home)?\.?\s*$/i.test(t)));B.L.forEach(z=>{if(z[0]&&/^(?:Past medical history|Regular medications?):/i.test(z[0]))z[0]=z[0].replace(/\s*(?:,|and)\s*(?:discharged|admitted|d\/c)\.$/i,".")})}catch(e){}return B}}
+/* p188 — "Train my words": the page shows each word you use (medicines, symptoms, findings, words from your saved notes), you say it once, and whatever the microphone writes is remembered as that word from then on */
+const VT_EXTRA="paracetamol ibuprofen ketorolac diclofenac tramadol morphine ondansetron metoclopramide ceftriaxone amoxicillin augmentin azithromycin omeprazole salbutamol prednisolone dexamethasone hydrocortisone chlorphenamine lidocaine tetanus troponin hematemesis melena dysuria hematuria epistaxis photophobia diplopia vertigo nystagmus crepitus tenderness guarding rebound rigidity lethargic lethargy afebrile febrile tachycardia bradycardia hypotension hypertension diabetes asthma epilepsy migraine appendicitis cholecystitis pancreatitis pyelonephritis gastroenteritis pharyngitis tonsillitis otitis bronchiolitis pneumonia cellulitis abscess laceration fracture dislocation sprain contusion abrasion hematoma seizure convulsion syncope palpitations dyspnea wheeze stridor cyanosis dehydration vomiting diarrhea constipation dysphagia odynophagia rhinorrhea conjunctivitis urticaria anaphylaxis angioedema pruritus jaundice hepatomegaly splenomegaly lymphadenopathy neurovascular paresthesia radiculopathy sciatica lumbar cervical thoracic clavicle humerus radius ulna scaphoid metacarpal phalanx femur tibia fibula malleolus calcaneus cullen murphy rovsing mcburney kernig brudzinski ultrasound radiograph electrocardiogram catheter cannula nebulizer splint backslab sutures steristrips glue intramuscular intravenous subcutaneous sublingual orthopedic surgical pediatric cardiology neurology urology gynecology ophthalmology otolaryngology dermatology psychiatry discharged admitted referred contacted vermilion buccal mucosa dermatome zoster shingles valacyclovir acyclovir";
+function vtWords(){const freq=new Map();const add=(w,n)=>{w=String(w||"").toLowerCase().replace(/[^a-z-]/g,"");if(w.length<5)return;freq.set(w,(freq.get(w)||0)+(n||1))};
+ try{qnLoad().forEach(x=>(String(x.text||"").toLowerCase().match(/[a-z][a-z-]{4,}/g)||[]).forEach(w=>add(w,3)))}catch(e){}
+ VT_EXTRA.split(" ").forEach(w=>add(w,2));try{voiceDict().forEach(w=>add(w,1))}catch(e){}
+ const STOP=new Set("patient presented today advised history examination without before after there their which while where these those about again because could would should other every their being since until under above below between through during against himself herself itself vitally stable general alert looking distress hydrated vesicular breath sounds equal bilaterally crackles recession normal findings noted denies reported reports immediately symptoms appear worse further please correct dictation understood".split(" "));
+ const LEARNED=new Set(Object.values(vLearned()).map(x=>String(x).toLowerCase()));
+ return [...freq.entries()].filter(([w])=>!STOP.has(w)&&!/^(?:no|not)/.test(w)&&!LEARNED.has(w)).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0])).map(([w])=>w)}
+document.head.insertAdjacentHTML("beforeend",`<style>.vtBox{border:1px solid var(--line);border-radius:12px;padding:12px;margin:8px 0;background:var(--soft)}.vtWord{font:800 1.6rem var(--body);margin:6px 0;color:#0d47a1;word-break:break-word}.vtHeard{font-size:.95rem;min-height:1.4em;margin:4px 0}.vtHeard.ok{color:#2e7d32}.vtHeard.bad{color:#c62828}.vtBox .btns{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}.vtBox .mic{background:#c62828;color:#fff;border:0;border-radius:999px;padding:10px 18px;font:800 1rem var(--body);min-height:44px}.vtBox .mic.on{background:#0d47a1}</style>`);
+$("qnVWords").insertAdjacentHTML("afterend",`<div class="vtBox" id="vtBox" hidden><b>Train my words</b> <span class="mini" id="vtProg"></span>
+ <p class="mini">Say the word shown. If the microphone writes something else, the page remembers it: next time it hears that, it writes the right word. Phone: use the red button, or tap the box and use the keyboard microphone.</p>
+ <div class="vtWord" id="vtWord">—</div><div class="vtHeard" id="vtHeard"></div>
+ <input type="text" id="vtIn" placeholder="or dictate here with the keyboard microphone" style="width:100%;max-width:420px">
+ <div class="btns"><button type="button" class="mic" id="vtMic">🎤 Say it</button><button type="button" class="b sm" id="vtOk">It was right — next</button><button type="button" class="b sm" id="vtSave">Remember this — next</button><button type="button" class="b sm ghost" id="vtSkip">Skip</button><button type="button" class="b sm ghost" id="vtBack">Back</button><button type="button" class="b sm ghost" id="vtClose">Close</button></div></div>`);
+$("qnVWordsB").insertAdjacentHTML("afterend",`<button type="button" class="b sm" id="vtOpen">Train my words</button>`);
+const VT={list:[],i:0,heard:"",rec:null};
+function vtIdx(){try{return +localStorage.getItem("erVtIdx")||0}catch(e){return 0}}
+function vtShow(){const w=VT.list[VT.i];$("vtWord").textContent=w||"All done — every word has been trained.";$("vtProg").textContent=VT.list.length?`${Math.min(VT.i+1,VT.list.length)} / ${VT.list.length}`:"";$("vtHeard").textContent="";$("vtHeard").className="vtHeard";$("vtIn").value="";VT.heard="";try{localStorage.setItem("erVtIdx",String(VT.i))}catch(e){}}
+function vtNext(){if(VT.i<VT.list.length)VT.i++;vtShow()}
+function vtHeardSet(t){const w=VT.list[VT.i]||"";const h=String(t||"").toLowerCase().replace(/[.,;!?]+$/,"").trim();VT.heard=h;const same=h===w||h.replace(/[^a-z]/g,"")===w.replace(/[^a-z]/g,"");$("vtHeard").textContent=h?`heard: "${h}"${same?" ✓":""}`:"";$("vtHeard").className="vtHeard "+(h?(same?"ok":"bad"):"")}
+function vtRemember(){const w=VT.list[VT.i];const h=VT.heard;if(!w||!h||h===w)return;try{const K=voiceKnown();if(!/\s/.test(h)&&K.has(h)&&h!==w){/* a real word was heard: remembering would corrupt it elsewhere, so it is kept only as a phrase */}}catch(e){}
+ const L=vLearned();L[h]=w;vLearnStore(L);try{if(typeof VDICT!=="undefined"&&VDICT&&!VDICT.includes(w))VDICT.push(w)}catch(e){}try{vWordsDraw()}catch(e){}}
+$("vtOpen").onclick=()=>{const b=$("vtBox");b.hidden=!b.hidden;if(!b.hidden){VT.list=vtWords();VT.i=Math.min(vtIdx(),VT.list.length);vtShow();b.scrollIntoView({block:"nearest"})}};
+$("vtClose").onclick=()=>{$("vtBox").hidden=true;try{VT.rec&&VT.rec.stop()}catch(e){}};
+$("vtOk").onclick=()=>{vtNext()};$("vtSkip").onclick=()=>{vtNext()};$("vtBack").onclick=()=>{if(VT.i>0)VT.i--;vtShow()};
+$("vtSave").onclick=()=>{if(!VT.heard)return notify("Say the word first (or dictate it into the box).");vtRemember();vtNext()};
+$("vtIn").addEventListener("input",()=>{vtHeardSet($("vtIn").value)});
+$("vtMic").onclick=()=>{const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return notify("The red button needs browser voice input; use the keyboard microphone in the box instead.");
+ try{VT.rec&&VT.rec.stop()}catch(e){}const r=new SR();VT.rec=r;r.lang=(QV&&QV.rec&&QV.rec.lang)||($("qnVLang")&&$("qnVLang").value)||"en-US";r.continuous=false;r.interimResults=false;r.maxAlternatives=3;
+ $("vtMic").classList.add("on");$("vtMic").textContent="Listening…";
+ r.onresult=e=>{const alts=[...e.results[0]].map(a=>a.transcript.trim().toLowerCase());const w=VT.list[VT.i]||"";const exact=alts.find(a=>a===w);vtHeardSet(exact||alts[0]||"");if(!exact&&alts.length>1)$("vtHeard").textContent+=`  (also: ${alts.slice(1).join(", ")})`};
+ r.onerror=e=>{$("vtHeard").textContent="microphone error: "+(e.error||"")+". Use the keyboard microphone in the box.";$("vtHeard").className="vtHeard bad"};
+ r.onend=()=>{$("vtMic").classList.remove("on");$("vtMic").textContent="🎤 Say it"};
+ try{r.start()}catch(e){r.onerror({error:"could not start"})}};
+/* words learned here also feed the fuzzy matcher as known targets */
+{const _d=voiceDict;voiceDict=function(){const d=_d();try{Object.values(vLearned()).forEach(w=>{const x=String(w).toLowerCase();if(x.length>=6&&!/\s/.test(x)&&!d.includes(x))d.push(x)})}catch(e){}return d}}
+/* training scenarios: shorthand-style dictation lines covering the common ED vocabulary; read each one aloud exactly as written */
+const VT_SCEN=[
+"25 year male sore throat 2 days, cough 1 day dry, fever on and off 38 point 5, no difficulty swallowing, no drooling, throat red with exudate, tender cervical lymph nodes, chest clear, paracetamol given, discharged",
+"6 year girl fever 3 days up to 39, runny nose, cough, no rash, no neck stiffness, feeding well, wet diapers normal, ears normal, tonsils enlarged no exudate, chest clear, viral upper respiratory tract infection, discharged",
+"45 year male chest pain 2 hours central heaviness radiating to left arm with sweating, known diabetes and hypertension, smoker, ECG ST elevation in leads two three and aVF, troponin pending, aspirin 300 milligrams given, cardiology on call contacted",
+"60 year female shortness of breath 3 days, orthopnea, bilateral leg swelling, known heart failure on furosemide, saturation 90 percent on room air, bibasal crackles, chest x-ray pulmonary edema, furosemide 40 milligrams IV given, admitted",
+"30 year female abdominal pain right iliac fossa 1 day with nausea and anorexia, fever 38 point 2, last menstrual period 2 weeks ago, urine pregnancy test negative, rebound tenderness, white cell count 14, ultrasound appendix 9 millimeters, general surgery on call contacted, admitted",
+"55 year male epigastric pain 6 hours radiating to the back with vomiting, alcohol intake, lipase 900, tender epigastrium no guarding, IV fluids normal saline 1 liter, ondansetron 4 milligrams IV, morphine 5 milligrams IV, admitted under surgery",
+"35 year female right loin pain colicky 4 hours radiating to the groin with hematuria, no fever, urine dipstick blood positive, CT KUB 5 millimeter stone right ureter, no hydronephrosis, ketorolac 30 milligrams IM given, tamsulosin prescribed, urology clinic follow up, discharged",
+"28 year female dysuria and frequency 3 days, no fever, no flank pain, urine dipstick nitrite positive leukocytes positive, nitrofurantoin 100 milligrams twice daily for 5 days prescribed, discharged",
+"70 year female fall at home on outstretched hand, right wrist pain swelling and deformity, no head injury, no loss of consciousness, x-ray distal radius fracture displaced, hematoma block, closed reduction, below elbow back slab applied, neurovascular intact, fracture clinic",
+"22 year male twisted right ankle playing football, pain and swelling lateral malleolus, able to bear weight, no bony tenderness, Ottawa rules negative, ankle sprain, RICE advice, ibuprofen 400 milligrams, discharged",
+"40 year male laceration left forearm 4 centimeters by glass 2 hours ago, no tendon injury, full range of movement, sensation intact, wound irrigated, 5 sutures under local anesthesia lidocaine, tetanus booster given, sutures out in 7 days, discharged",
+"8 year boy head injury fell from bicycle, hit forehead, no loss of consciousness, vomited once, GCS 15, no focal neurology, scalp hematoma, no skull fracture, observed 4 hours, head injury advice given, discharged",
+"50 year male headache sudden severe thunderclap 1 hour, vomiting, neck stiffness, no fever, no focal deficit, CT brain subarachnoid hemorrhage, neurosurgery contacted, admitted",
+"33 year female migraine headache throbbing unilateral 8 hours with photophobia and nausea, known migraine, similar episodes before, no red flags, metoclopramide 10 milligrams IV, paracetamol 1 gram IV, improved, discharged",
+"65 year male sudden left sided weakness and slurred speech 1 hour, facial droop, blood pressure 170 over 95, blood glucose 6, CT brain no hemorrhage, stroke team activated, thrombolysis considered, admitted",
+"19 year male seizure generalized tonic clonic 2 minutes at home, witnessed by his mother, post ictal drowsy, tongue bite, no incontinence, no fever, first seizure, blood glucose normal, CT brain normal, neurology referral, admitted for observation",
+"3 year girl febrile seizure 3 minutes, fever 39 point 5, otitis media right ear, back to baseline, no neck stiffness, simple febrile seizure, paracetamol, amoxicillin prescribed, discharged with advice",
+"26 year female asthma exacerbation, wheeze and shortness of breath 2 days, peak flow 250, saturation 94 percent, speaking in phrases, salbutamol nebulizer 5 milligrams, ipratropium 500 micrograms, prednisolone 40 milligrams, improved, discharged with inhaler",
+"2 year boy bronchiolitis, cough and wheeze 3 days, feeding reduced, respiratory rate 50, mild recession, saturation 95 percent, chest bilateral wheeze and crackles, nasal suction, discharged with safety netting",
+"48 year female palpitations 1 hour, heart rate 180 regular narrow complex, blood pressure 120 over 80, vagal maneuvers failed, adenosine 6 milligrams then 12 milligrams IV, reverted to sinus rhythm, supraventricular tachycardia, discharged, cardiology clinic",
+"72 year male atrial fibrillation rapid ventricular response, heart rate 140 irregular, dizziness, known hypertension, metoprolol 5 milligrams IV, rate controlled, apixaban started, admitted",
+"58 year female diabetic ketoacidosis, vomiting and polyuria 2 days, blood glucose 28, ketones 5, pH 7 point 1, bicarbonate 10, IV fluids, insulin infusion, potassium replacement, admitted to high dependency",
+"80 year female hypoglycemia, found drowsy at home, blood glucose 2 point 1, on gliclazide, dextrose 10 percent 200 milliliters IV, recovered, admitted for observation",
+"36 year male anaphylaxis after eating shrimp, urticaria, lip swelling, wheeze, blood pressure 85 over 50, adrenaline 500 micrograms IM, hydrocortisone 200 milligrams IV, chlorphenamine 10 milligrams IV, IV fluids, improved, observed 6 hours, EpiPen prescribed, discharged",
+"5 year boy urticaria generalized itchy rash 1 day, no lip swelling, no breathing difficulty, cetirizine prescribed, discharged",
+"24 year female vaginal bleeding 7 weeks pregnant, mild lower abdominal pain, no shoulder tip pain, beta hCG 2500, ultrasound no intrauterine pregnancy, no free fluid, gynecology on call contacted, repeat beta hCG in 48 hours",
+"29 year female 34 weeks pregnant headache and blurred vision, blood pressure 160 over 110, urine protein 2 plus, epigastric pain, pre-eclampsia, labetalol, magnesium sulfate, obstetrics contacted, admitted",
+"52 year male rectal bleeding fresh blood 2 days, no abdominal pain, hemoglobin 11, hemodynamically stable, per rectal examination hemorrhoids, discharged, surgical clinic",
+"41 year male hematemesis coffee ground vomiting 1 episode, melena, known peptic ulcer, on ibuprofen, hemoglobin 9, blood pressure 100 over 60, heart rate 110, IV fluids, pantoprazole 80 milligrams IV, group and save, gastroenterology contacted, admitted",
+"4 year girl gastroenteritis vomiting and diarrhea 2 days, mild dehydration, dry lips, capillary refill 2 seconds, oral rehydration solution tolerated, ondansetron 2 milligrams oral, discharged",
+"68 year male urinary retention 12 hours, suprapubic pain, known benign prostatic hyperplasia, bladder scan 800 milliliters, urinary catheter inserted, drained 900 milliliters clear urine, tamsulosin, urology clinic, discharged with catheter",
+"34 year female renal colic known stone, pain 9 out of 10, diclofenac 75 milligrams IM, improved, discharged with analgesia",
+"47 year male low back pain 1 week after lifting, no red flags, no saddle anesthesia, no urinary retention, straight leg raise negative, mechanical back pain, naproxen 500 milligrams twice daily, physiotherapy, discharged",
+"62 year female cauda equina suspected, back pain with bilateral leg weakness, saddle numbness, urinary retention, post void residual 600 milliliters, urgent MRI, neurosurgery contacted, admitted",
+"23 year male cellulitis right leg 3 days, redness warmth and swelling, fever 38, no abscess, flucloxacillin 500 milligrams four times daily, marked the area, discharged",
+"31 year female abscess left axilla 5 days, fluctuant 3 centimeters, incision and drainage under local anesthesia, packed, wound review in 2 days, discharged",
+"15 year boy testicular pain sudden 2 hours left side, nausea, high riding testis, absent cremasteric reflex, testicular torsion suspected, urology contacted, nil by mouth, theatre",
+"56 year male red eye painful 1 day, photophobia, blurred vision, contact lens user, corneal ulcer, fluorescein uptake, ophthalmology contacted, chloramphenicol",
+"38 year female sudden hearing loss and tinnitus left ear 1 day, no vertigo, otoscopy normal, Weber lateralizes to the right, ENT contacted, prednisolone",
+"44 year male epistaxis 1 hour not stopping with pressure, on warfarin, INR 3 point 5, nasal pack inserted, bleeding controlled, ENT clinic in 48 hours, discharged",
+"27 year female dental pain lower left molar 3 days, swelling of the face, no trismus, dental abscess, amoxicillin and metronidazole, dental referral, discharged",
+"53 year male burn right hand hot oil, partial thickness 2 percent, blisters, cooled with running water, silver sulfadiazine dressing, tetanus up to date, burns clinic, discharged",
+"7 year girl dog bite right calf, puncture wounds, irrigated, not sutured, augmentin, tetanus booster, rabies vaccine schedule started, discharged",
+"71 year male confusion and fever 38 point 9 and dysuria 2 days, blood pressure 100 over 60, heart rate 110, lactate 2 point 5, urine dipstick positive, blood cultures taken, ceftriaxone 2 grams IV, sepsis, admitted",
+"39 year female overdose paracetamol 20 tablets 3 hours ago, intentional, vomited twice, paracetamol level at 4 hours pending, N-acetylcysteine started, psychiatry referral, admitted",
+"64 year female herpes zoster rash right T6 dermatome 2 days, burning pain, vesicles, no eye involvement, valacyclovir 1 gram three times daily, analgesia, discharged",
+"18 year male lip laceration 1 centimeter crossing the vermilion border, no tooth fracture, no active bleeding, sutured with alignment of the vermilion border, soft diet, sutures out in 5 days, discharged",
+"35 year male sickle cell disease vaso occlusive crisis pain in both legs and back 1 day, no chest pain, no fever, saturation 98 percent, morphine 10 milligrams IV, IV fluids, hematology contacted, admitted",
+"42 year female dizziness vertigo spinning 2 days worse on turning the head, nausea, no hearing loss, no focal neurology, head impulse test abnormal, Dix-Hallpike positive right, benign paroxysmal positional vertigo, Epley maneuver, prochlorperazine, discharged",
+"20 month male change in feeding and sleeping pattern 2 days, mother reports lethargic and not playful, no fever, no rash, no vomiting, no seizures, wet diapers normal, alert, well hydrated, chest clear, observation"
+];
+/* p189 — "Train with scenarios": read a whole case aloud; the page compares what the microphone wrote with the text and remembers every difference */
+$("vtBox").insertAdjacentHTML("afterend",`<div class="vtBox" id="vsBox" hidden><b>Train with scenarios</b> <span class="mini" id="vsProg"></span>
+ <p class="mini">Read the case aloud exactly as written (tap the red button, read, tap Stop; or tap the box and use the keyboard microphone). Then press <b>Learn and try again</b>: every wrong word is remembered as the right one. Read the same case once more to check; when it comes out correct, the next case appears.</p>
+ <div id="vsText" style="font:600 1.05rem/1.5 var(--body);color:#0d47a1;margin:6px 0"></div>
+ <textarea id="vsIn" rows="3" placeholder="what the microphone writes appears here (or dictate here with the keyboard microphone)" style="width:100%"></textarea>
+ <div class="vtHeard" id="vsDiff"></div>
+ <div class="btns"><button type="button" class="mic" id="vsMic">🎤 Read it</button><button type="button" class="b sm" id="vsLearn">Learn and try again</button><button type="button" class="b sm ghost" id="vsSkip">Skip</button><button type="button" class="b sm ghost" id="vsBack">Back</button><button type="button" class="b sm ghost" id="vsClose">Close</button></div></div>`);
+$("vtOpen").insertAdjacentHTML("afterend",`<button type="button" class="b sm" id="vsOpen">Train with scenarios</button>`);
+const VSC={i:0,rec:null,on:false,fin:""};
+function vsIdx(){try{return +localStorage.getItem("erVsIdx")||0}catch(e){return 0}}
+function vsShow(){$("vsLearn").textContent="Learn and try again";const t=VT_SCEN[VSC.i];$("vsText").textContent=t||"All scenarios done. Dictate real cases now; corrections you make in the box are learned too.";$("vsProg").textContent=`${Math.min(VSC.i+1,VT_SCEN.length)} / ${VT_SCEN.length}`;$("vsIn").value="";$("vsDiff").textContent="";$("vsDiff").className="vtHeard";VSC.fin="";try{localStorage.setItem("erVsIdx",String(VSC.i))}catch(e){}}
+function vsNorm(s){return String(s||"").toLowerCase().replace(/[.,;:!?()]/g," ").replace(/\s+/g," ").trim()}
+function vsPairs(got,exp){const A=vsNorm(voiceSmart(got)).split(" "),B=vsNorm(voiceClean(exp)).split(" ");const m=A.length,n=B.length;const dp=Array.from({length:m+1},()=>new Array(n+1).fill(0));for(let i=m-1;i>=0;i--)for(let j=n-1;j>=0;j--)dp[i][j]=A[i]===B[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+ let i=0,j=0;const pairs=[];let da=[],db=[];const flush=()=>{if(da.length||db.length)pairs.push([da.join(" "),db.join(" ")]);da=[];db=[]};while(i<m&&j<n){if(A[i]===B[j]){flush();i++;j++}else if(dp[i+1][j]>=dp[i][j+1]){da.push(A[i]);i++}else{db.push(B[j]);j++}}while(i<m)da.push(A[i++]);while(j<n)db.push(B[j++]);flush();return pairs}
+function vsCompare(){const exp=VT_SCEN[VSC.i]||"";const got=$("vsIn").value;if(!got.trim()){$("vsDiff").textContent="";return false}
+ const pairs=vsPairs(got,exp);const ok=!pairs.length;$("vsDiff").innerHTML=ok?"✓ Correct — matches the text":"Wrong: "+pairs.slice(0,10).map(([h,t])=>`<b>${esc(h||"(missing)")}</b> → ${esc(t||"(extra)")}`).join(" · ");$("vsDiff").className="vtHeard "+(ok?"ok":"bad");return ok}
+$("vsOpen").onclick=()=>{const b=$("vsBox");b.hidden=!b.hidden;if(!b.hidden){VSC.i=Math.min(vsIdx(),VT_SCEN.length);vsShow();b.scrollIntoView({block:"nearest"})}};
+$("vsClose").onclick=()=>{$("vsBox").hidden=true;vsStop()};
+$("vsSkip").onclick=()=>{if(VSC.i<VT_SCEN.length)VSC.i++;vsShow()};$("vsBack").onclick=()=>{if(VSC.i>0)VSC.i--;vsShow()};
+$("vsIn").addEventListener("input",vsCompare);
+function vsLearnNow(){const exp=VT_SCEN[VSC.i];const got=$("vsIn").value.trim();if(!exp||!got)return 0;const cleaned=voiceSmart(got);let n=0;try{n=voiceLearnFrom(vsNorm(cleaned),vsNorm(voiceClean(exp)))}catch(e){}
+ try{const A=vsNorm(cleaned).split(" "),B=vsNorm(voiceClean(exp)).split(" ");if(A.length===B.length){const L=vLearned();A.forEach((w,i)=>{if(w!==B[i]&&w.length>=3&&!/^\d+$/.test(w)&&!voiceKnown().has(w)){L[w]=B[i];n++}});vLearnStore(L)}}catch(e){}
+ try{vWordsDraw()}catch(e){}return n}
+$("vsLearn").onclick=()=>{const exp=VT_SCEN[VSC.i];const got=$("vsIn").value.trim();if(!exp)return;if(!got)return notify("Read the case first.");
+ const ok=vsCompare();
+ if(ok){VSC.tries=0;notify("Correct. Next case.");if(VSC.i<VT_SCEN.length)VSC.i++;vsShow();return}
+ const n=vsLearnNow();VSC.tries=(VSC.tries||0)+1;$("vsIn").value="";
+ if(VSC.tries>=3){notify("Still different after 3 readings; the corrections are saved. Moving on.");VSC.tries=0;if(VSC.i<VT_SCEN.length)VSC.i++;vsShow();return}
+ $("vsDiff").innerHTML=`<b>Learned ${n} correction${n===1?"":"s"}.</b> Now read the same case again to check (reading ${VSC.tries+1} of 3).`;$("vsDiff").className="vtHeard";$("vsLearn").textContent="Check";};
+function vsStop(){VSC.on=false;try{VSC.rec&&VSC.rec.stop()}catch(e){}$("vsMic").classList.remove("on");$("vsMic").textContent="🎤 Read it"}
+$("vsMic").onclick=()=>{if(VSC.on)return vsStop();const SR=window.SpeechRecognition||window.webkitSpeechRecognition;if(!SR)return notify("The red button needs browser voice input; use the keyboard microphone in the box instead.");
+ const r=new SR();VSC.rec=r;r.lang=($("qnVLang")&&$("qnVLang").value)||"en-US";r.continuous=true;r.interimResults=true;VSC.fin="";VSC.on=true;$("vsMic").classList.add("on");$("vsMic").textContent="Stop";
+ r.onresult=e=>{let interim="";for(let i=e.resultIndex;i<e.results.length;i++){const x=e.results[i];if(x.isFinal)VSC.fin+=(VSC.fin?" ":"")+x[0].transcript.trim();else interim+=x[0].transcript}$("vsIn").value=VSC.fin+(interim?" "+interim:"");vsCompare()};
+ r.onerror=e=>{$("vsDiff").textContent="microphone error: "+(e.error||"")+". Use the keyboard microphone in the box.";$("vsDiff").className="vtHeard bad";vsStop()};
+ r.onend=()=>{if(VSC.on){try{r.start();return}catch(e){}}vsStop()};
+ try{r.start()}catch(e){r.onerror({error:"could not start"})}};
+/* the step runs by itself when the reading stops; errors are shown on the box instead of failing silently; the stage is written in large text */
+$("vsText").insertAdjacentHTML("beforebegin",`<div id="vsStage" style="font:800 1rem var(--body);margin:4px 0;color:#b45309">Step 1: read the case, then tap Stop.</div>`);
+function vsStage(t,color){const el=$("vsStage");if(el){el.textContent=t;el.style.color=color||"#b45309";try{el.scrollIntoView({block:"nearest"})}catch(e){}}}
+{const _show=vsShow;vsShow=function(){_show();vsStage(`Step 1: read case ${Math.min(VSC.i+1,VT_SCEN.length)}, then tap Stop.`)}}
+function vsStep(){try{const exp=VT_SCEN[VSC.i];const got=$("vsIn").value.trim();if(!exp){vsStage("All scenarios done.","#2e7d32");return}if(!got){vsStage("Nothing was heard. Tap Read it and read the case, or dictate into the box.","#c62828");return}
+  const ok=vsCompare();
+  if(ok){VSC.tries=0;vsStage("✓ Correct. Next case…","#2e7d32");setTimeout(()=>{if(VSC.i<VT_SCEN.length)VSC.i++;vsShow()},900);return}
+  const n=vsLearnNow();VSC.tries=(VSC.tries||0)+1;
+  if(VSC.tries>=3){vsStage("Saved after 3 readings. Next case…","#2e7d32");VSC.tries=0;setTimeout(()=>{if(VSC.i<VT_SCEN.length)VSC.i++;vsShow()},900);return}
+  $("vsIn").value="";vsStage(`Learned ${n} correction${n===1?"":"s"}. Step 2: read the SAME case again to check (reading ${VSC.tries+1} of 3).`);$("vsLearn").textContent="Check"}
+ catch(e){vsStage("Error: "+(e&&e.message||e),"#c62828")}}
+$("vsLearn").onclick=()=>{vsStop();vsStep()};
+/* when the microphone stops with text in the box, the step runs on its own */
+{const _stop=vsStop;vsStop=function(){const was=VSC.on;_stop();if(was&&$("vsIn").value.trim())setTimeout(vsStep,300)}}
+/* p190 — learning that actually sticks: long wrong runs are saved as phrases (up to 8 words), each learned correction is shown on the screen, and learned words are matched approximately afterwards (a near-miss of a learned mishearing is corrected too) */
+function vsLearnPairs(got,exp){const A=vsNorm(voiceSmart(got)).split(" ").filter(Boolean),B=vsNorm(voiceClean(exp)).split(" ").filter(Boolean);const m=A.length,n=B.length;if(!m||!n)return [];
+ const dp=Array.from({length:m+1},()=>new Array(n+1).fill(0));for(let i=m-1;i>=0;i--)for(let j=n-1;j>=0;j--)dp[i][j]=A[i]===B[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+ let i=0,j=0;const out=[];let da=[],db=[];const flush=()=>{if(da.length&&db.length){const h=da.join(" "),t=db.join(" ");if(h!==t&&/[a-z]/.test(h)&&!/^\d+$/.test(h)&&h.length>=3&&da.length<=8&&db.length<=8)out.push([h,t])}da=[];db=[]};
+ while(i<m&&j<n){if(A[i]===B[j]){flush();i++;j++}else if(dp[i+1][j]>=dp[i][j+1]){da.push(A[i]);i++}else{db.push(B[j]);j++}}while(i<m)da.push(A[i++]);while(j<n)db.push(B[j++]);flush();
+ /* a long block is also split word by word when both sides have the same number of words */
+ const extra=[];out.forEach(([h,t])=>{const a=h.split(" "),b=t.split(" ");if(a.length>1&&a.length===b.length)a.forEach((w,k)=>{if(w!==b[k]&&w.length>=3&&!/^\d+$/.test(w))extra.push([w,b[k]])})});
+ return out.concat(extra)}
+vsLearnNow=function(){const exp=VT_SCEN[VSC.i];const got=$("vsIn").value.trim();if(!exp||!got)return 0;const pairs=vsLearnPairs(got,exp);if(!pairs.length)return 0;const L=vLearned();pairs.forEach(([h,t])=>{L[h]=t});const keys=Object.keys(L);if(keys.length>600)keys.slice(0,keys.length-600).forEach(k=>delete L[k]);vLearnStore(L);
+ try{vWordsDraw()}catch(e){}VSC.lastLearned=pairs;return pairs.length};
+{const _step=vsStep;vsStep=function(){_step();try{const p=VSC.lastLearned||[];const el=$("vsDiff");if(p.length&&/Step 2/.test($("vsStage").textContent)){el.innerHTML="Saved: "+p.slice(0,12).map(([h,t])=>`<b>${esc(h)}</b> → ${esc(t)}`).join(" · ");el.className="vtHeard ok"}VSC.lastLearned=[]}catch(e){}}}
+/* approximate application of learned words: "him a globin" learned → "hima globin" or "him a globen" also become hemoglobin */
+{const _apply=voiceLearnedApply;voiceLearnedApply=function(t){let s=_apply(t);try{const L=vLearned();const keys=Object.keys(L).filter(k=>k&&L[k]);if(!keys.length)return s;
+  const K=voiceKnown();const toks=s.split(/(\s+|[,.;:()]+)/);const words=toks.map((x,i)=>/^[a-z]+$/i.test(x)?i:-1).filter(i=>i>=0);
+  keys.forEach(k=>{const kw=k.toLowerCase().split(" ");const n=kw.length;if(n>4)return;for(let p=0;p+n<=words.length;p++){const idx=words.slice(p,p+n);const seg=idx.map(i=>toks[i].toLowerCase());if(seg.join(" ")===k.toLowerCase())continue;/* exact already handled */
+    let ok=true,dist=0;for(let q=0;q<n;q++){const a=seg[q],b=kw[q];if(a===b)continue;if(a.length<4||K.has(a)&&n===1){ok=false;break}const d=vLev(a,b);const thr=b.length>=8?2:1;if(d>thr){ok=false;break}dist+=d}
+    if(ok&&dist>0){toks[idx[0]]=L[k];for(let q=1;q<n;q++)toks[idx[q]]="";for(let q=idx[0]+1;q<idx[n-1];q++)if(/^\s+$/.test(toks[q]))toks[q]="";}}});
+  s=toks.join("").replace(/\s{2,}/g," ")}catch(e){}return s}}
+/* the fuzzy matcher never merges a short joining word ("no drooling" stayed "drooling") */
+{const _f=voiceFuzzy;voiceFuzzy=function(t){const PH={no:"①",not:"②",and:"③",or:"④",with:"⑤",of:"⑥",the:"⑦",a:"⑧",an:"⑨",in:"⑩",on:"⑪",to:"⑫",for:"⑬",is:"⑭",was:"⑮",he:"⑯",she:"⑰",his:"⑱",her:"⑲"};
+ let s=String(t||"").replace(/\b(no|not|and|or|with|of|the|an?|in|on|to|for|is|was|he|she|his|her)\b/gi,(m,w)=>PH[w.toLowerCase()]||m);s=_f(s);
+ Object.entries(PH).forEach(([w,p])=>{s=s.split(p).join(w)});return s}}
+/* p191 — phrase mode for scenario training: each case is read in short pieces (one comma-separated phrase at a time), which the microphone recognizes far better than a long run */
+VSC.phrase=true;VSC.pi=0;
+function vsParts(){const t=VT_SCEN[VSC.i]||"";return t.split(/,\s*/).map(x=>x.trim()).filter(Boolean)}
+function vsCur(){return VSC.phrase?(vsParts()[VSC.pi]||""):(VT_SCEN[VSC.i]||"")}
+$("vsBox").querySelector("p.mini").insertAdjacentHTML("afterend",`<label class="mini" style="display:flex;gap:6px;align-items:center;margin:4px 0"><input type="checkbox" id="vsPhrase" checked> Short pieces (one phrase at a time — recommended)</label>`);
+$("vsPhrase").onchange=()=>{VSC.phrase=$("vsPhrase").checked;VSC.pi=0;vsShow()};
+{const _show=vsShow;vsShow=function(){_show();if(VSC.phrase&&VT_SCEN[VSC.i]){const parts=vsParts();if(VSC.pi>=parts.length)VSC.pi=0;$("vsText").textContent=parts[VSC.pi]||"";$("vsProg").textContent=`case ${VSC.i+1} / ${VT_SCEN.length} · piece ${VSC.pi+1} / ${parts.length}`;vsStage(`Step 1: read this piece, then tap Stop.`)}}}
+/* compare and learn against the current piece */
+vsPairs=function(got,exp){const A=vsNorm(voiceSmart(got)).split(" ").filter(Boolean),B=vsNorm(voiceClean(exp)).split(" ").filter(Boolean);const m=A.length,n=B.length;const dp=Array.from({length:m+1},()=>new Array(n+1).fill(0));for(let i=m-1;i>=0;i--)for(let j=n-1;j>=0;j--)dp[i][j]=A[i]===B[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+ let i=0,j=0;const pairs=[];let da=[],db=[];const flush=()=>{if(da.length||db.length)pairs.push([da.join(" "),db.join(" ")]);da=[];db=[]};while(i<m&&j<n){if(A[i]===B[j]){flush();i++;j++}else if(dp[i+1][j]>=dp[i][j+1]){da.push(A[i]);i++}else{db.push(B[j]);j++}}while(i<m)da.push(A[i++]);while(j<n)db.push(B[j++]);flush();return pairs};
+vsCompare=function(){const exp=vsCur();const got=$("vsIn").value;if(!got.trim()){$("vsDiff").textContent="";return false}const pairs=vsPairs(got,exp);const ok=!pairs.length;$("vsDiff").innerHTML=ok?"✓ Correct — matches the text":"Wrong: "+pairs.slice(0,10).map(([h,t])=>`<b>${esc(h||"(missing)")}</b> → ${esc(t||"(extra)")}`).join(" · ");$("vsDiff").className="vtHeard "+(ok?"ok":"bad");return ok};
+vsLearnNow=function(){const exp=vsCur();const got=$("vsIn").value.trim();if(!exp||!got)return 0;const pairs=vsLearnPairs(got,exp).filter(([h,t])=>h&&t);if(!pairs.length)return 0;const L=vLearned();pairs.forEach(([h,t])=>{L[h]=t});vLearnStore(L);try{vWordsDraw()}catch(e){}VSC.lastLearned=pairs;return pairs.length};
+function vsAdvance(){if(VSC.phrase){const parts=vsParts();if(VSC.pi+1<parts.length){VSC.pi++;vsShow();return}VSC.pi=0}if(VSC.i<VT_SCEN.length)VSC.i++;vsShow()}
+vsStep=function(){try{const exp=vsCur();const got=$("vsIn").value.trim();if(!exp){vsStage("All scenarios done.","#2e7d32");return}if(!got){vsStage("Nothing was heard. Tap Read it and read the text, or dictate into the box.","#c62828");return}
+  const ok=vsCompare();if(ok){VSC.tries=0;vsStage("✓ Correct. Next…","#2e7d32");setTimeout(vsAdvance,700);return}
+  const n=vsLearnNow();VSC.tries=(VSC.tries||0)+1;const p=VSC.lastLearned||[];
+  if(VSC.tries>=3){vsStage("Saved after 3 readings. Next…","#2e7d32");VSC.tries=0;setTimeout(vsAdvance,700);return}
+  $("vsIn").value="";$("vsDiff").innerHTML=p.length?"Saved: "+p.slice(0,12).map(([h,t])=>`<b>${esc(h)}</b> → ${esc(t)}`).join(" · "):"Words were missing rather than wrong: nothing to save. Read a little slower.";$("vsDiff").className="vtHeard "+(p.length?"ok":"bad");
+  vsStage(`Step 2: read the SAME piece again to check (reading ${VSC.tries+1} of 3).`);$("vsLearn").textContent="Check"}
+ catch(e){vsStage("Error: "+(e&&e.message||e),"#c62828")}};
+$("vsSkip").onclick=()=>{VSC.tries=0;vsAdvance()};$("vsBack").onclick=()=>{VSC.tries=0;if(VSC.phrase&&VSC.pi>0){VSC.pi--;vsShow();return}if(VSC.i>0){VSC.i--;VSC.pi=0;vsShow()}};
+/* the microphone language on the iPhone: a hint when the dictation looks like another language or drops half the words */
+/* the box compared the dictation with the WHOLE case instead of the piece shown (the old comparison stayed attached to the box): rebound here */
+{const old=$("vsIn");const nw=old.cloneNode(true);old.parentNode.replaceChild(nw,old);nw.addEventListener("input",()=>{vsCompare()})}
+/* keyboard dictation: when the piece is correct the box shows what it was understood as and moves on by itself; when wrong, it learns after a short pause */
+{let tm=null;const box=$("vsIn");box.addEventListener("input",()=>{clearTimeout(tm);tm=setTimeout(()=>{if(VSC.on)return;const got=box.value.trim();if(!got)return;const exp=vsCur();if(!exp)return;const ok=vsCompare();
+  if(ok){const u=vsNorm(voiceSmart(got));if(u!==vsNorm(voiceClean(exp)).replace(/\s+/g," ")||vsNorm(got)!==vsNorm(voiceClean(exp)))$("vsDiff").innerHTML=`✓ Correct — "${esc(got)}" is understood as "${esc(exp)}". Next…`;else $("vsDiff").textContent="✓ Correct. Next…";VSC.tries=0;setTimeout(vsAdvance,1200)}
+  else vsStep()},2500)})}
+/* a piece with nothing to save no longer shows the previous piece's "Saved" line */
+{const _ln=vsLearnNow;vsLearnNow=function(){VSC.lastLearned=[];return _ln()}}
+/* p192 — voice memory safety: a correction is kept only when the misheard side is not a real word (so "notes → nodes" or "just to → chest" can never rewrite normal dictation); the existing memory is cleaned the same way; a Reset button */
+function vLearnSafe(h,t){h=String(h||"").toLowerCase().trim();t=String(t||"").trim();if(!h||!t||h===t.toLowerCase())return false;if(/^\d+$/.test(h)||h.length<3)return false;
+ let K;try{K=voiceKnown()}catch(e){K=new Set()}const hw=h.split(/\s+/);const tw=t.toLowerCase().split(/\s+/);
+ /* the target is always a word or phrase from the page's own vocabulary or the scenarios */
+ const unknownHeard=hw.filter(w=>!K.has(w)&&w.length>=3);
+ if(!unknownHeard.length)return false;                 /* every heard word is a real word: too dangerous */
+ if(hw.length===1&&tw.length>3)return false;            /* one word → long phrase: no */
+ if(hw.some(w=>/^(?:no|not|and|or|the|with|of|to|in|on|for|is|was|he|she|his|her|a|an)$/.test(w))&&hw.length<=2)return false;
+ return true}
+{const _store=vLearnStore;vLearnStore=function(o){const c={};Object.entries(o||{}).forEach(([h,t])=>{if(vLearnSafe(h,t)||(VOICE_MANUAL&&VOICE_MANUAL.has(h)))c[h]=t});return _store(c)}}
+let VOICE_MANUAL=new Set();try{VOICE_MANUAL=new Set(JSON.parse(localStorage.getItem("erVoiceManual")||"[]"))}catch(e){}
+{const _add=$("qnVAdd").onclick;$("qnVAdd").addEventListener("click",()=>{const h=$("qnVHeard").value.trim().toLowerCase();if(h){VOICE_MANUAL.add(h);try{localStorage.setItem("erVoiceManual",JSON.stringify([...VOICE_MANUAL]))}catch(e){}}},true)}
+/* clean what is already stored */
+setTimeout(()=>{try{const L=vLearned();const before=Object.keys(L).length;vLearnStore(L);const after=Object.keys(vLearned()).length;if(before!==after)notify(`Voice memory cleaned: ${before-after} unsafe correction${before-after===1?"":"s"} removed.`)}catch(e){}},1500);
+/* reset */
+$("qnVList").insertAdjacentHTML("beforebegin",`<div class="btns"><button type="button" class="b sm ghost" id="qnVReset">Reset voice memory</button></div>`);
+$("qnVReset").onclick=()=>{if(!confirm("Forget all learned voice corrections on this browser?"))return;try{localStorage.removeItem("erVoiceLearned");localStorage.removeItem("erVoiceManual");localStorage.removeItem("erVsIdx");localStorage.removeItem("erVtIdx")}catch(e){}VOICE_MANUAL=new Set();try{vWordsDraw()}catch(e){}notify("Voice memory reset.")};
+/* learning from scenarios goes through the same gate */
+{const _lp=vsLearnPairs;vsLearnPairs=function(got,exp){return _lp(got,exp).filter(([h,t])=>vLearnSafe(h,t))}}
+/* the known-word set covers the whole page (hidden tabs too), the scenarios and the training vocabulary, so real words are recognized as real */
+{const _k=voiceKnown;let BIG=null;voiceKnown=function(){const k=_k();if(!BIG){BIG=new Set();try{const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT,{acceptNode:n=>{const p=n.parentNode&&n.parentNode.nodeName;return /^(?:SCRIPT|STYLE|TEMPLATE)$/.test(p||"")?NodeFilter.FILTER_REJECT:NodeFilter.FILTER_ACCEPT}});let n;while((n=w.nextNode()))(String(n.nodeValue||"").toLowerCase().match(/[a-z]{3,}/g)||[]).forEach(x=>BIG.add(x))}catch(e){}try{VT_SCEN.forEach(s=>(s.toLowerCase().match(/[a-z]{3,}/g)||[]).forEach(w=>BIG.add(w)))}catch(e){}try{VT_EXTRA.split(" ").forEach(w=>BIG.add(w))}catch(e){}
+  "limb limbs burst notes note chest nodes node lymph pain rolling exotic".split(" ").forEach(w=>{if(!/^(?:rolling|exotic)$/.test(w))BIG.add(w)})}
+ BIG.forEach(w=>k.add(w));return k}}
+/* when a piece is correct only thanks to a learned correction, the box itself shows the corrected words, and the line says what the microphone had written */
+{const _cmp=vsCompare;let guard=false;vsCompare=function(){if(guard)return _cmp();const raw=$("vsIn").value;const ok=_cmp();try{if(ok){const exp=vsCur();if(vsNorm(raw)!==vsNorm(voiceClean(exp))){$("vsDiff").innerHTML=`✓ Correct. The microphone wrote "<b>${esc(raw.trim())}</b>" — the page corrected it to "<b>${esc(exp)}</b>".`;$("vsDiff").className="vtHeard ok"}}}catch(e){}return ok}}
+/* a correct piece moves on by itself even while the keyboard dictation keeps sending text; and a Next button is always there */
+{let advT=null,advFor="";const _cmp=vsCompare;vsCompare=function(){const ok=_cmp();try{const key=VSC.i+":"+VSC.pi;if(ok&&!VSC.on&&advFor!==key){advFor=key;clearTimeout(advT);advT=setTimeout(()=>{if(VSC.i+":"+VSC.pi===key){VSC.tries=0;vsAdvance()}},3000)}}catch(e){}return ok}}
+$("vsSkip").insertAdjacentHTML("beforebegin",`<button type="button" class="b sm" id="vsNext">Next piece →</button>`);$("vsNext").onclick=()=>{VSC.tries=0;vsStop();vsAdvance()};
+/* after a pause, the training box itself is rewritten with the corrected words ("No rolling" → "no drooling"), as the note box does */
+{let tm=null;const box=$("vsIn");box.addEventListener("input",()=>{clearTimeout(tm);tm=setTimeout(()=>{try{const raw=box.value;if(!raw.trim())return;const fixed=voiceSmart(voiceClean(raw));if(vsNorm(fixed)!==vsNorm(raw)){box.value=fixed;$("vsDiff").innerHTML=`Microphone wrote "<b>${esc(raw.trim())}</b>" → corrected to "<b>${esc(fixed)}</b>"`+(vsNorm(fixed)===vsNorm(voiceClean(vsCur()))?" ✓":"");}}catch(e){}},900)})}
+/* p193 — contextual voice corrections: a mis-hearing that is itself a real word ("20 email" = "20 year male", "today's calf 1 day" = "2 days cough 1 day") is learned together with the word before it and applied only in that context; duplicated dictation in the note box is removed; common iPhone mis-hearings built in */
+VOICE_FIX.unshift([/\b(\d{1,3})\s*(?:e-?mails?|e mail|yml|eml|yo male|your male|yo mail)\b/gi,"$1 year male"],[/\b(\d{1,3})\s*(?:yo female|your female|female mail)\b/gi,"$1 year female"],
+ [/\btoday'?s\b(?=\s+(?:calf|cough|cuff|fever|pain|vomit\w*|diarrh\w*|headache|rash))/gi,"2 days,"],[/\b(?:calf|cuff|coff)\b(?=\s+(?:\d+\s*days?|dry|productive|with|and|for))/gi,"cough"],[/\bno drooling saliva\b/gi,"no drooling, no difficulty swallowing saliva"],[/\bfever of (\d{2}(?:\.\d)?)\b/gi,"fever $1"]);
+/* contextual learning for real-word mis-hearings */
+function vCtxKey(prev,heard){return "ctx:"+(/^\d+$/.test(prev)?"#":prev)+"|"+heard}
+{const _lp=vsLearnPairs;vsLearnPairs=function(got,exp){const all=_lp(got,exp);/* _lp is already filtered by vLearnSafe (p192); recover the unsafe ones with context */
+ try{const A=vsNorm(voiceSmart(got)).split(" ").filter(Boolean),B=vsNorm(voiceClean(exp)).split(" ").filter(Boolean);
+  const m=A.length,n=B.length;const dp=Array.from({length:m+1},()=>new Array(n+1).fill(0));for(let i=m-1;i>=0;i--)for(let j=n-1;j>=0;j--)dp[i][j]=A[i]===B[j]?dp[i+1][j+1]+1:Math.max(dp[i+1][j],dp[i][j+1]);
+  let i=0,j=0,da=[],db=[],start=-1;const out=[];const flush=()=>{if(da.length&&db.length&&da.length<=3&&db.length<=4){const h=da.join(" "),t=db.join(" ");if(h!==t&&!vLearnSafe(h,t)&&start>0){out.push([vCtxKey(A[start-1],h),t])}}da=[];db=[];start=-1};
+  while(i<m&&j<n){if(A[i]===B[j]){flush();i++;j++}else if(dp[i+1][j]>=dp[i][j+1]){if(start<0)start=i;da.push(A[i]);i++}else{if(start<0)start=i;db.push(B[j]);j++}}while(i<m){if(start<0)start=i;da.push(A[i++])}while(j<n)db.push(B[j++]);flush();
+  return all.concat(out)}catch(e){return all}}}
+{const _safe=vLearnSafe;vLearnSafe=function(h,t){if(/^ctx:/.test(String(h||"")))return !!t;return _safe(h,t)}}
+{const _apply=voiceLearnedApply;voiceLearnedApply=function(t){let s=_apply(t);try{const L=vLearned();Object.keys(L).forEach(k=>{if(!/^ctx:/.test(k))return;const m=k.match(/^ctx:([^|]+)\|(.+)$/);if(!m)return;const prev=m[1]==="#"?"\\d+":m[1].replace(/[.*+?^${}()|[\]\\]/g,"\\$&");const heard=m[2].replace(/[.*+?^${}()|[\]\\]/g,"\\$&");s=s.replace(new RegExp("\\b("+prev+")\\s+"+heard+"\\b","gi"),(mm,p)=>p+" "+L[k])})}catch(e){}return s}}
+/* the Voice words list shows contextual entries readably */
+{const _draw=vWordsDraw;vWordsDraw=function(){_draw();try{$("qnVList").querySelectorAll("span").forEach(sp=>{sp.innerHTML=sp.innerHTML.replace(/ctx:#\|/g,"[number] ").replace(/ctx:([^|<]+)\|/g,"$1 ")})}catch(e){}}}
+/* duplicated dictation in the note box: the same passage twice in a row is kept once */
+function vDedupe(t){let s=String(t||"");try{const parts=s.split(/(?<=[.!?])\s+|\n+/);const norm=x=>x.toLowerCase().replace(/[^a-z0-9]+/g," ").trim();const out=[];for(const p of parts){const n=norm(p);if(!n)continue;if(out.some(q=>{const qn=norm(q);return qn===n||(n.length>25&&(qn.includes(n)||n.includes(qn)))}))continue;out.push(p)}
+  s=out.join(" ");/* a run-on repeated without a full stop: "A B C A B C" */const w=s.split(/\s+/);for(let len=Math.floor(w.length/2);len>=6;len--){for(let i=0;i+2*len<=w.length;i++){const a=w.slice(i,i+len).join(" ").toLowerCase(),b=w.slice(i+len,i+2*len).join(" ").toLowerCase();if(a===b){w.splice(i+len,len);return vDedupe(w.join(" "))}}}}catch(e){}return s}
+{const _vs=voiceSmart;voiceSmart=function(t){return vDedupe(_vs(t))}}
+/* dictation glued to a number ("fever20 year") is separated */
+{const _vc=voiceClean;voiceClean=function(t){return _vc(String(t||"").replace(/([a-z]{4,})(\d{2,})/gi,"$1 $2").replace(/(\d)([a-z]{4,})/gi,(m,d,w)=>/^(?:mg|ml|cm|mm|kg|mcg|year|years|day|days|week|weeks|month|months|hour|hours|min|mins)$/i.test(w)?m:d+" "+w))}}
+/* p194 — no rewriting of the box while the iPhone is still dictating (rewriting mid-dictation made the phone re-insert the text and double it); the note is parsed from the corrected text at all times; the box itself is tidied 6 s after the last word or when you leave it */
+const VH={last:0,force:false};$("qnIn").addEventListener("input",()=>{VH.last=Date.now()});
+{const _vs=voiceSmart;voiceSmart=function(t){if(!VH.force&&Date.now()-VH.last<6000&&document.activeElement===$("qnIn"))return String(t||"");return _vs(t)}}
+{const _vc=voiceClean;voiceClean=function(t){if(!VH.force&&Date.now()-VH.last<6000&&document.activeElement===$("qnIn")&&!QV.on)return String(t||"");return _vc(t)}}
+function vTidyBox(){const ta=$("qnIn");if(!ta||QV.on)return;const cb=$("qnVFixTyped");VH.force=true;let v;try{v=voiceClean(ta.value);if(cb&&cb.checked)v=voiceSmart(v)}finally{VH.force=false}if(v!==ta.value){const atEnd=ta.selectionStart===ta.value.length;ta.value=v;if(atEnd)ta.selectionStart=ta.selectionEnd=v.length;try{qnRun()}catch(e){}}}
+{let tm=null;$("qnIn").addEventListener("input",()=>{clearTimeout(tm);tm=setTimeout(vTidyBox,6200)});$("qnIn").addEventListener("blur",()=>{clearTimeout(tm);setTimeout(vTidyBox,100)})}
+/* parsing always sees the corrected text */
+{const _q=qnParse;qnParse=function(raw){let r=String(raw||"");try{const cb=$("qnVFixTyped");if(cb&&cb.checked&&QV_PHONE){VH.force=true;r=voiceSmart(voiceClean(r))}}catch(e){}finally{VH.force=false}return _q(r)}}
+/* a dictated temperature of "30.x" is 38.x */
+VOICE_FIX.unshift([/\b(fever|temp(?:erature)?|t)\b([^.;,]{0,30}?)\b30\.(\d)\b/gi,"$1$238.$3"],[/\bfever documented (?:was |of )?(\d{2}(?:\.\d)?)\b/gi,"fever $1"],[/\bdocumented was\b/gi,"documented"],[/\bcough lost\b/gi,"cough"]);
+/* more iPhone mis-hearings seen in real notes */
+VOICE_FIX.unshift([/\b(sore throat|throat|pain|cough|fever|vomiting|diarrh(?:ea|oea)|headache|rash|swelling)\s+today'?s\b/gi,"$1 2 days"],[/\b(fever|temp(?:erature)?)\s+(?:after|of|at|was|is)?\s*([0-9])\.(\d)\s*\+?/gi,"$1 3$2.$3 "],[/\b(3[6-9]|4[0-2])\.(\d)\s*\+/g,"$1.$2"],[/\b(3[6-9]|4[0-2])\.(\d)\s+fever and documented\b/gi,"$1.$2, documented"],[/\bfever and documented\b/gi,"fever, documented"],[/\b(sore throat|throat|pain|cough|vomiting|headache|rash) 2 days fever\b/gi,"$1 2 days, fever"],[/\bnon-documented fever after\b/gi,"fever"]);
+/* p195 — Dr Ahmed's voice print: recurring mis-hearings gathered from his dictations (spoken to Claude and to the page), applied before anything else */
+const VOICE_PRINT=[
+ [/\b(?:bus|boss|bust|past|pass|best) (?:medical|surgical) history\b/gi,m=>m.replace(/^\w+/,"past")],[/\b(?:bus|boss|bust) medical\b/gi,"past medical"],
+ [/\bin(?:o|a)culic\b/gi,"chronic"],[/\bchronic disease diseases\b/gi,"chronic diseases"],
+ [/\b(?:AR|ER|air|ear) notes?\b/gi,"ER note"],[/\bcloud (?:AI|ai)\b/g,"Claude AI"],
+ [/\bsomebody taping\b/gi,"buddy taping"],[/\bbody taping\b/gi,"buddy taping"],
+ [/\bpain (?:skill|scale) (?:of )?(\d{1,2})\b/gi,"pain score $1 out of 10"],[/\bpain (?:skill|scale)\b/gi,"pain score"],
+ [/\bvital signs? (?:are |is )?stable\b/gi,"vitally stable"],[/\bvitally stable\b/gi,"vitally stable"],
+ [/\bdiffer?(?:e|a)nt notes?\b/gi,"different notes"],
+ [/\b(?:stephanie|steph any)\b/gi,"diplopia"],[/\bnintendo(?: nintendo)?\b/gi,"no tenderness"],
+ [/\bbottom of the moon\b/gi,"paracetamol"],[/\bprocessed all\b/gi,"paracetamol"],[/\bpara ?seat ?a ?mol\b/gi,"paracetamol"],[/\bpanadol\b/gi,"paracetamol"],
+ [/\bcongressional\b/gi,"seizures"],[/\bintervenous\b/gi,"intravenous"],[/\bintro injection\b/gi,"an unnamed injection"],
+ [/\bno rush\b/gi,"no rash"],[/\bskin rush\b/gi,"skin rash"],[/\bno flex\b/gi,"no flank pain"],
+ [/\bsmall lethargic\b/gi,"somewhat lethargic"],[/\bcullens? (?:inside|in side|sign)\b/gi,"Cullen's sign"],[/\btest trauma\b/gi,"trauma"],
+ [/\bhe niceness\b/gi,"he denies"],[/\bshe niceness\b/gi,"she denies"],[/\bhe nice is\b/gi,"he denies"],
+ [/\bresults? (?:are|is) bending\b/gi,"results pending"],[/\bno post medical(?: history)?\b/gi,"no past medical history"],
+ [/\bkettle (?:rack|rock|lack|rolac)\b/gi,"ketorolac"],[/\bcricket (?:injection)?\b/gi,m=>m.replace(/cricket/i,"ketorolac")],
+ [/\bexodus\b/gi,"exudate"],[/\bexotic\b(?=[^.]{0,20}\b(?:throat|tonsil|pharyn))/gi,"exudate"],[/\b(?:limb|limp) notes?\b/gi,"lymph nodes"],[/\bcervical limb\b/gi,"cervical lymph"],
+ [/\b(\d{1,3})\s*(?:e-?mails?|e mail|eml|yml|your mail|yo mail|yo male|email male)\b/gi,"$1 year male"],[/\b(\d{1,3})\s*(?:yo female|your female|email female|e-?mail female)\b/gi,"$1 year female"],
+ [/\bcalf\b(?=\s+(?:\d+\s*days?|dry|productive|with|and|for|,))/gi,"cough"],[/\bno rolling\b/gi,"no drooling"],
+ [/\bdocumented was\b/gi,"documented"],[/\bfever (?:after|of|at) ([0-9])\.(\d)\b/gi,"fever 3$1.$2"],[/\b30\.(\d)\b(?=[^.]{0,20}\b(?:fever|temp))/gi,"38.$1"],
+ [/\bvermillion\b/gi,"vermilion"],[/\bbuckle mucosa\b/gi,"buccal mucosa"],
+ [/\bJAHA\b/g,"JHAH"],[/\bjaha\b/gi,"JHAH"],
+ [/\bd\/c home\b/gi,"discharged home"],[/\bdee see\b/gi,"d/c"],[/\bdischarge the patient\b/gi,"discharged"],
+ [/\bthe general surgery (?:physician )?(?:was )?contacted\b/gi,"general surgery contacted"],
+ [/\bno any\b/gi,"no"],[/\bhe (?:denies|deny) any\b/gi,"he denies"]
+];
+VOICE_FIX.unshift(...VOICE_PRINT);
+/* the same print is applied inside the dictation cleaner, so typed-dictation notes get it even when the box is not rewritten */
+{const _c=qnDictClean;qnDictClean=function(raw){let t=String(raw||"");VOICE_PRINT.forEach(([re,to])=>{t=t.replace(re,to)});return _c(t)}}
+/* p196 — Painless hematuria: a presentation card with the questions that matter, the examination, the step-by-step investigations (BAUS/NICE-style pathway), the red flags, the ranked differential and the plan */
+regCC({id:"phemat",n:"Painless hematuria",g:"Abdominal & GU",spec:"urology",imp:"Painless visible hematuria, urological malignancy to be excluded",
+ dl:["Painless hematuria","Painless haematuria","Blood in the urine without pain","Visible hematuria","Gross hematuria","Frank hematuria","Non-visible hematuria","Microscopic hematuria"],
+ info:[{id:"phType",l:"Type of hematuria",o:["","visible (gross) hematuria","non-visible (dipstick or microscopy only)","visible with clots"],s:v=>v?`Hematuria: ${v}`:""},
+  {id:"phTime",l:"Timing in the stream",o:["","throughout the stream (total)","at the start (initial)","at the end (terminal)","not noticed"],s:v=>v&&v!=="not noticed"?`Blood ${v}`:""},
+  {id:"phDur",l:"Duration (days)",num:1,s:v=>v?`for ${v} day${+v===1?"":"s"}`:""},{id:"phEp",l:"Episodes",o:["","first episode","recurrent episodes","persistent"],s:v=>v?`${v}`:""},
+  {id:"phCol",l:"Urine color",o:["","pink","red","dark red or brown (cola-colored)","red with clots"],s:v=>v?`urine ${v}`:""},
+  {id:"phSmk",l:"Smoking",o:["","never","ex-smoker","current smoker (pack-years below)"],s:v=>v?`${v}`:""},{id:"phPy",l:"Pack-years",num:1,s:v=>v?`${v} pack-years`:""},
+  {id:"phAC",l:"Anticoagulant or antiplatelet",o:["","none","aspirin or clopidogrel","warfarin","DOAC (apixaban, rivaroxaban, dabigatran)","enoxaparin"],s:v=>v&&v!=="none"?`on ${v}`:""},
+  {id:"phDip",l:"Urine dipstick",o:["","blood 1+","blood 2+","blood 3+","blood with protein","blood with nitrite or leukocytes","negative"],s:v=>v?`dipstick: ${v}`:""},
+  {id:"phCr",l:"Creatinine (µmol/L)",num:1,s:v=>v?`creatinine ${v}`:""},{id:"phHb",l:"Hemoglobin (g/dL)",num:1,s:v=>v?`Hb ${v}`:""}],
+ ask:[["phPain","Flank, loin or suprapubic pain with the bleeding","Painful hematuria","Painless hematuria (no flank or suprapubic pain)",{a:"Pain points to stone, infection or clot colic; painless hematuria is cancer until proven otherwise in adults."}],
+  ["phClot","Passing clots","Passing clots","No clots",{a:"Clots mean a lower tract (bladder or prostate) or heavy upper tract bleed: clot retention risk; three-way catheter and irrigation if retention."}],
+  ["phRet","Unable to pass urine or passing only small amounts","Difficulty passing urine or retention","Passing urine normally",{a:"Clot retention: three-way catheter (22 Fr), manual bladder washout, urology now."}],
+  ["phLUTS","Frequency, urgency, nocturia, weak stream or hesitancy","Lower urinary tract symptoms","No lower urinary tract symptoms",{a:"Bladder cancer, prostate enlargement or infection: cystoscopy and PSA (men)."}],
+  ["phDys","Burning on urination or fever","Dysuria or fever","No dysuria or fever",{a:"Infection: culture and treat, then REPEAT the dipstick 2 weeks after treatment; persistent hematuria still needs referral."}],
+  ["phWt","Weight loss, loss of appetite or night sweats","Weight loss or constitutional symptoms","No weight loss or constitutional symptoms",{a:"Malignancy: urgent referral and CT urogram."}],
+  ["phUrti","Sore throat or chest infection in the last 1 to 3 weeks","Recent upper respiratory infection","No recent infection",{a:"IgA nephropathy (hematuria 1 to 2 days after the infection) or post-streptococcal glomerulonephritis (1 to 3 weeks after): check blood pressure, creatinine, urine protein; nephrology."}],
+  ["phEx","Strenuous exercise, long run or march in the last 48 hours","Recent strenuous exercise","No recent strenuous exercise",{a:"Exercise hematuria clears within 72 hours: repeat the dipstick after rest; still refer if it persists."}],
+  ["phMens","Currently menstruating, or within a week of a period","Menstruating","Not menstruating",{cond:p=>p.sex==="female",a:"Possible contamination: repeat the sample after the period (clean catch or catheter specimen)."}],
+  ["phTrau","Recent trauma to the abdomen, flank or perineum, or recent catheter or cystoscopy","Recent trauma or instrumentation","No trauma or instrumentation",{a:"Traumatic hematuria: CT with contrast (renal injury) or retrograde study if urethral injury is suspected."}],
+  ["phStone","Known kidney stones, or previous renal colic","History of stones","No history of stones",{a:"Stones: CT KUB; but painless hematuria in a stone-former still needs cancer exclusion."}],
+  ["phCa","Previous bladder, kidney or prostate cancer, or pelvic radiotherapy","Previous urological cancer or pelvic radiotherapy","No previous urological cancer",{a:"Recurrence or radiation cystitis: urology urgently."}],
+  ["phOcc","Work with dyes, rubber, leather, paint, chemicals or aromatic amines","Occupational exposure (dyes, rubber, chemicals)","No occupational exposure",{a:"Occupational bladder cancer risk."}],
+  ["phCyc","Previous cyclophosphamide, or long-term analgesic (phenacetin) use","Cyclophosphamide or analgesic exposure","No cyclophosphamide or analgesic abuse",{a:"Cyclophosphamide: bladder cancer and hemorrhagic cystitis."}],
+  ["phSch","Lived in or traveled to an area with schistosomiasis (Egypt, Sudan, sub-Saharan Africa), or swam in fresh water there","Schistosomiasis exposure","No schistosomiasis exposure",{a:"Schistosoma haematobium: terminal hematuria, eosinophilia, eggs in urine; squamous bladder cancer risk; praziquantel."}],
+  ["phTB","Chronic sterile pyuria, night sweats or known TB contact","Possible genitourinary TB","No features of genitourinary TB",{a:"Genitourinary TB: three early-morning urines for AFB."}],
+  ["phFam","Family history of kidney disease, deafness, polycystic kidneys or urological cancer","Family history of renal disease","No family history of renal disease",{a:"Alport syndrome (deafness), polycystic kidney disease, familial cancer."}],
+  ["phSick","Sickle cell disease or trait","Sickle cell disease or trait","No sickle cell disease",{a:"Papillary necrosis; renal medullary carcinoma in trait (CT urogram)."}],
+  ["phRash","Joint pains, rash, mouth ulcers or swelling of the face or legs","Features of a systemic or glomerular cause","No rash, joint pain or edema",{a:"Glomerulonephritis, vasculitis or lupus: blood pressure, creatinine, urine protein:creatinine ratio, ANA, ANCA, complement; nephrology."}],
+  ["phBl","Easy bruising, gum bleeding or a known bleeding disorder","Bleeding tendency","No bleeding tendency",{a:"Coagulopathy: INR, platelets; anticoagulation does not explain hematuria, investigate as usual."}]],
+ exam:[["phBP","Hypertension (over 140/90)","Hypertension","Blood pressure normal",{a:"Hypertension with hematuria and proteinuria: nephritic syndrome, nephrology."}],
+  ["phMass","Palpable flank or abdominal mass","Flank or abdominal mass","No abdominal or flank mass",{a:"Renal mass: CT urogram urgently."}],
+  ["phTend","Flank or suprapubic tenderness","Flank or suprapubic tenderness","No flank or suprapubic tenderness"],
+  ["phBlad","Palpable bladder","Palpable bladder","Bladder not palpable",{a:"Retention: bladder scan, catheter."}],
+  ["phPros","Enlarged, hard or nodular prostate on rectal examination","Abnormal prostate on rectal examination","Prostate normal on rectal examination",{cond:p=>p.sex==="male"&&p.ageY!==null&&p.ageY>=40,a:"Hard or nodular: PSA and urology."}],
+  ["phGen","Urethral meatus bleeding, phimosis, balanitis or vulvovaginal source","Local genital or urethral source","No local genital or urethral source",{a:"Blood at the meatus between voids is urethral; vaginal bleeding contaminates the sample."}],
+  ["phEd","Peripheral or periorbital edema","Edema","No edema",{a:"Nephritic or nephrotic picture: protein:creatinine ratio, albumin, nephrology."}],
+  ["phPale","Pallor, tachycardia or postural drop","Signs of significant blood loss","No signs of significant blood loss",{a:"Hb, group and save, IV access, urology now."}]],
+ inv:[["Urine dipstick, microscopy (red cell morphology, casts) and culture",1],["FBC, U&E, creatinine and eGFR; coagulation screen if anticoagulated or bleeding tendency",1],["Urine protein:creatinine ratio",1],["PSA (men over 40, after counselling, not during infection)",0],["CT urogram (visible hematuria or age 40 and over); renal and bladder ultrasound if under 40, pregnant or contrast contraindicated",1],["Flexible cystoscopy via urology",1],["Urine cytology",0],["Urine for Schistosoma ova and eosinophil count if exposure",0],["Three early-morning urines for AFB if sterile pyuria or TB risk",0],["Nephrology screen if glomerular pattern: ANA, ANCA, anti-GBM, complement, ASOT, hepatitis B and C, HIV",0]],
+ meds:[["ivf","Resuscitation if hemodynamically compromised"],["txa","Not routinely; discuss with urology (clot retention risk)"]],
+ ifc:["Painless visible hematuria in an adult is a urological cancer (bladder, kidney, upper tract) until excluded: 2-week-wait (urgent) urology referral at any age 45 and over; also refer at any age if recurrent or persistent, or with risk factors",
+  "Non-visible hematuria: confirm on 2 of 3 dipsticks 1 to 2 weeks apart (not during infection, menstruation or after exercise); refer urgently at 60 and over with dysuria or a raised white cell count; otherwise routine urology or nephrology by findings",
+  "Never attribute hematuria to anticoagulants or antiplatelets alone: they unmask a lesion in up to a quarter of cases; investigate exactly as for any other patient",
+  "Glomerular pattern (dysmorphic red cells, casts, proteinuria, hypertension, raised creatinine, cola-colored urine, recent infection): nephrology rather than urology",
+  "Infection: treat and repeat the dipstick 2 weeks after the course; hematuria that persists after treatment still needs the pathway",
+  "Children: painless hematuria is more often glomerular (IgA nephropathy, post-infectious GN, Alport, thin basement membrane) or hypercalciuria; ultrasound, protein:creatinine ratio, creatinine, complement; pediatric nephrology",
+  "In this region ask about schistosomiasis exposure (Egypt, Sudan): terminal hematuria, eosinophilia; urine microscopy for ova; praziquantel 40 mg/kg; squamous cell bladder cancer risk later",
+  "ED disposition: discharge if hemodynamically stable, passing urine, Hb stable and no clot retention, with the referral made and the first investigations sent; admit for clot retention, significant anemia, acute kidney injury, uncontrolled bleeding or anticoagulation that needs reversal",
+  "Document: visible or non-visible, timing in the stream, clots, smoking pack-years, occupation, anticoagulants, previous cancer, and the referral made"],
+ ret:["unable to pass urine, or passing only small amounts","passing large clots or the urine becoming heavily blood-stained","dizziness, fainting, breathlessness or chest pain","fever, rigors or flank pain","swelling of the face or legs, or reduced urine output"],
+ cdx:[["bladder cancer (urothelial carcinoma)",2,{old:3,phSmk:3,"phSmk=current":2,phOcc:3,phCyc:3,phClot:2,phLUTS:1,phWt:2,phCa:3,"phTime=terminal":1,"phTime=throughout":1},"Flexible cystoscopy; CT urogram."],
+  ["renal cell carcinoma",1,{old:2,phMass:5,phWt:2,phSmk:1,phSick:1},"CT urogram; renal mass is incidental in half."],
+  ["upper tract urothelial carcinoma",0,{old:2,phSmk:2,phOcc:2,phCyc:1,"phTime=throughout":1},"CT urogram, ureteroscopy."],
+  ["prostatic bleeding (BPH or prostate cancer)",0,{phPros:5,phLUTS:2,"phTime=initial":2,"phTime=terminal":1},"PSA, rectal examination, cystoscopy."],
+  ["urinary tract infection or hemorrhagic cystitis",0,{phDys:5,"phDip=nitrite":4,phLUTS:1},"Culture; repeat dipstick 2 weeks after treatment."],
+  ["urinary stone (painless passage or staghorn)",0,{phStone:4,phTend:1},"CT KUB; still exclude cancer if age 45 and over."],
+  ["IgA nephropathy",0,{phUrti:4,"phCol=cola":3,phBP:2,"phDip=protein":3,"!old":2},"1 to 2 days after an upper respiratory infection; protein:creatinine ratio, creatinine; nephrology; biopsy."],
+  ["post-streptococcal or other acute glomerulonephritis",0,{phUrti:3,"phCol=cola":3,phBP:3,phEd:3,"phDip=protein":2,"!old":1},"1 to 3 weeks after pharyngitis or impetigo; ASOT, C3 low; nephrology."],
+  ["vasculitis or lupus nephritis",0,{phRash:5,phBP:1,"phDip=protein":2},"ANA, ANCA, complement; urgent nephrology."],
+  ["schistosomiasis (Schistosoma haematobium)",0,{phSch:6,"phTime=terminal":2},"Urine microscopy for ova (midday terminal urine); eosinophils; praziquantel."],
+  ["genitourinary tuberculosis",0,{phTB:5},"Three early-morning urines for AFB; sterile pyuria."],
+  ["exercise-induced hematuria",0,{phEx:5,"!old":1,"!phClot":1},"Clears within 72 hours; repeat dipstick."],
+  ["menstrual contamination",0,{phMens:5},"Repeat after the period (clean catch)."],
+  ["anticoagulant-unmasked lesion",0,{"phAC=warfarin":2,"phAC=DOAC":2,"phAC=enoxaparin":2,phBl:1},"INR or anti-Xa; investigate fully regardless."],
+  ["trauma or instrumentation",0,{phTrau:6},"CT with contrast (renal injury); retrograde urethrogram if meatal blood after trauma."],
+  ["sickle cell nephropathy or papillary necrosis",0,{phSick:5},"Hydration; CT urogram (renal medullary carcinoma in trait)."],
+  ["Alport syndrome or thin basement membrane disease",0,{phFam:4,"!old":2},"Family history, audiology, nephrology."],
+  ["radiation or cyclophosphamide cystitis",0,{phCa:2,phCyc:3},"Cystoscopy; urology."]],
+ plan:x=>{const p=x.pt,age=p.ageY,male=p.sex==="male",kid=age!==null&&age<16;const type=x.i("phType"),vis=/visible \(gross\)|clots/.test(type)||type===""&&!/non-visible/.test(type);const nonvis=/non-visible/.test(type);
+  const ac=x.i("phAC");const anticoag=ac&&ac!=="none";const cr=numI(x,"phCr"),hb=numI(x,"phHb");
+  const glom=yn(x,"phUrti")||yn(x,"phRash")||yn(x,"phEd")||yn(x,"phBP")||/cola/.test(x.i("phCol"))||/protein/.test(x.i("phDip"));
+  const infect=yn(x,"phDys")||/nitrite/.test(x.i("phDip"));
+  const rf=[yn(x,"phRet")&&"clot retention or difficulty voiding",yn(x,"phClot")&&"passing clots",yn(x,"phPale")&&"signs of blood loss",hb!==null&&hb<10&&`Hb ${hb} g/dL`,cr!==null&&cr>130&&`creatinine ${cr} µmol/L`,yn(x,"phMass")&&"flank or abdominal mass",yn(x,"phWt")&&"weight loss",yn(x,"phBP")&&glom&&"nephritic features (hypertension with hematuria)",anticoag&&yn(x,"phPale")&&"bleeding on anticoagulation"].filter(Boolean);
+  const urgent=!kid&&(vis&&(age===null||age>=45)||yn(x,"phWt")||yn(x,"phMass")||yn(x,"phCa")||(nonvis&&age!==null&&age>=60&&(yn(x,"phDys")||yn(x,"phLUTS"))));
+  const cls=`<b>${rf.some(r=>/retention|clots|blood loss|Hb/.test(r))?"Urology now (clot retention or bleeding)":urgent?"Urgent (2-week) urology referral: malignancy pathway":glom?"Glomerular pattern: nephrology":kid?"Pediatric painless hematuria: ultrasound, protein:creatinine ratio, creatinine, pediatric nephrology":nonvis?"Non-visible hematuria: confirm on repeat dipsticks, then refer by age and symptoms":"Visible hematuria under 45 with no risk factors: urology referral (routine to urgent by findings)"}</b>${type?` | ${esc(type)}`:""}${rf.length?" | <b style='color:#c62828'>red flags present</b>":""}`;
+  const dx="<b>Questions that change the pathway:</b> visible or not, timing in the stream (initial = urethra or prostate, terminal = bladder neck or schistosomiasis, total = bladder or above), clots, pain, smoking pack-years, occupation, anticoagulants, previous cancer or radiotherapy, recent infection (glomerular), exercise, menstruation, schistosomiasis exposure. <b>Examine:</b> blood pressure, flank masses, bladder, genitalia, prostate (men), edema.";
+  const steps=["<b>Step 1 — urine:</b> dipstick and microscopy (confirm red cells; dysmorphic cells or casts = glomerular), culture; protein:creatinine ratio.","<b>Step 2 — blood:</b> FBC, U&E and creatinine with eGFR"+(anticoag?", INR or anti-Xa":"")+(male&&age!==null&&age>=40?", PSA after counselling (not during infection)":"")+".",
+   "<b>Step 3 — imaging:</b> "+((vis&&(age===null||age>=40))?"CT urogram (contrast with delayed phase) as the first-line study":"renal and bladder ultrasound first (under 40, pregnancy, or contrast contraindicated); CT urogram if abnormal or risk factors")+".",
+   "<b>Step 4 — cystoscopy:</b> flexible cystoscopy through urology"+(urgent?" within 2 weeks (urgent referral made from the ED)":" at the urology clinic")+".",
+   infect?"<b>Infection present:</b> treat, then repeat the dipstick 2 weeks after the course; persistent hematuria still goes down the pathway.":"",
+   glom?"<b>Glomerular pattern:</b> nephrology referral; ANA, ANCA, complement, ASOT, hepatitis serology; biopsy decided by nephrology.":"",
+   yn(x,"phSch")?"<b>Schistosomiasis exposure:</b> terminal (midday) urine for ova, eosinophil count; praziquantel 40 mg/kg if positive.":"",
+   anticoag?"<b>Anticoagulant:</b> do not stop it without a reason (check INR or dose); the bleeding still needs full investigation.":"",
+   "<b>Clot retention:</b> three-way 22 Fr catheter, manual washout, continuous irrigation, urology now."].filter(Boolean);
+  const disp=[rf.some(r=>/retention|clots|blood loss|Hb|creatinine/.test(r))?"Admit under urology (or nephrology for acute kidney injury)":"Discharge if hemodynamically stable, passing clear or lightly stained urine, Hb stable: investigations sent, "+(urgent?"urgent (2-week) urology referral made":glom?"nephrology referral made":"urology referral made")+", patient told why"];
+  return {def:"Blood in the urine without pain. Painless visible hematuria in an adult is a urological cancer until proven otherwise (bladder about 20%, kidney and upper tract less); non-visible hematuria is more often benign but follows the same confirmation and referral rules.",cls,rf,dx,steps,disp,line:rf.length?`Painless hematuria red flags: ${rf.join(", ")}.`:"",mon:["Urine output and clots","Hemoglobin if heavy bleeding","Blood pressure and creatinine if glomerular pattern"]}}});
+try{if(typeof CMAP!=="undefined"&&CMAP.phemat&&!CMAP.phemat.score)CMAP.phemat.score=x=>planOut(CMAP.phemat.plan(x))}catch(e){}
+/* quick note: "painless hematuria" is this presentation */
+if(typeof QN_SHORT!=="undefined")QN_SHORT.unshift([/\b(?:painless|baneless|pain less|pan less) (?:hematuria|haematuria|blood in (?:the )?urine)\b/gi,"painless hematuria"],[/\bgross hematuria\b/gi,"visible hematuria"]);
+if(typeof VOICE_FIX!=="undefined")VOICE_FIX.unshift([/\b(?:baneless|bane less|pan less|painless) (?:hematuria|haematuria|him a turia|hema turia|a maturia)\b/gi,"painless hematuria"]);
+/* p197 — Telegram immediately: when Claude finishes the rewrite the note is sent (first time) or re-sent as "Updated note"; if Claude fails, the draft is sent at once instead of waiting; "save" no longer waits for retries */
+TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){return true}})();
+{const box=$("tgSet");if(box){box.querySelector("#tgAuto").closest("label").insertAdjacentHTML("afterend",`<label class="mini" style="display:flex;gap:6px;align-items:center;margin-top:4px"><input type="checkbox" id="tgAutoAi"${TG.autoAi?" checked":""}> Send as soon as Claude finishes the rewrite (10 s after your last change), without saying "save"</label>`);
+ $("tgAutoAi").onchange=()=>{TG.autoAi=$("tgAutoAi").checked;try{localStorage.setItem("erTgAutoAi",TG.autoAi?"1":"0")}catch(e){}}}}
+/* 1. after a rewrite: save (which sends) 10 s after the last change */
+{let tm=null;const _show=qaiShow;qaiShow=function(){_show();try{if(!TG.autoAi||!tgReady()||!QAI.B)return;clearTimeout(tm);const raw=$("qnIn").value.trim();tm=setTimeout(()=>{if($("qnIn").value.trim()!==raw||!QAI.B)return;if(QV.on)return;qnAdd(qnText(QAI.B),qnHTML(QAI.B,false),"quick")},10000)}catch(e){}}}
+/* 2. when Claude fails, the draft goes at once (the status already says why) */
+{const _st=qaiStatus;qaiStatus=function(msg,cls){_st(msg,cls);try{if(cls==="err"&&TG.autoAi&&tgReady()&&qnLast&&qnLast.B&&$("qnIn").value.trim()){setTimeout(()=>{try{if(QAI.B)return;qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");notify("Claude failed: the draft note was sent to Telegram.")}catch(e){}},50)}}catch(e){}}}
+/* 3. "save": wait for the running rewrite, but a failure sends the draft immediately (no second attempt, no 90 s) */
+{const _save=qvSaveNow;qvSaveNow=function(){if(!(typeof QAI!=="undefined"&&QAI.on&&qaiProv()))return _save();
+  qvStatus("<b>Writing the final note…</b> it is sent and saved the moment the check is finished.");try{qaiRun(true)}catch(e){}
+  let n=0;const tick=()=>{n++;if(!QAI.busy&&QAI.B){qaiShow();qnAdd(qnText(QAI.B),qnHTML(QAI.B,false),"quick");qvStatus("<b>Saved and sent.</b>");return}
+   if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
+   if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
+/* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
+const ER_VERSION="v175";
+document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
+document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
+{const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
+function tgLast(msg,ok){const el=$("tgLast");if(!el)return;const t=new Date();el.textContent=`Telegram (${ER_VERSION}): ${msg} — ${t.getHours().toString().padStart(2,"0")}:${t.getMinutes().toString().padStart(2,"0")}:${t.getSeconds().toString().padStart(2,"0")}`;el.className=ok===true?"ok":ok===false?"bad":""}
+{const _n=notify;notify=function(msg){try{const m=String(msg||"");if(/^Sent to Telegram|^Opened Telegram|^Sent by the fallback/.test(m))tgLast(m,true);else if(/Telegram did not accept|Telegram could not|network blocked|Set up Telegram/.test(m))tgLast(m,false);else if(/draft note was sent to Telegram/.test(m))tgLast(m,true)}catch(e){}return _n.apply(this,arguments)}}
+{const _s=tgSend;tgSend=async function(text,plain,viaClick){tgLast("sending…");return _s(text,plain,viaClick)}}
+{const _bar=tgBarShow;tgBarShow=function(text,label){tgLast("this page cannot send by itself here (Claude app): tap the blue bar",false);return _bar(text,label)}}
+/* the auto-send path reports why it did not send */
+{const _add=qnAdd;qnAdd=function(text,html,src){const r=_add(text,html,src);try{if(src==="quick"){if(!tgReady())tgLast("not set up (token or chat ID missing)",false);else if(!TG.auto)tgLast("automatic sending is switched off in Telegram settings",false)}}catch(e){}return r}}
+/* p199 — Stroke / TIA card updated to the 2026 AHA/ASA acute ischemic stroke guideline: tenecteplase or alteplase within 4.5 h for disabling deficits (no NIHSS floor, no advanced imaging), 4.5–9 h and wake-up with mismatch imaging, thrombectomy to 24 h including large core (ASPECTS 3–5) and basilar occlusion (NIHSS ≥10), DAPT for minor stroke or high-risk TIA, blood pressure and glucose rules, swallow screen */
+Object.assign(MED,{
+ tnk:{n:"Tenecteplase (stroke)",r:"IV",a:"0.25 mg/kg (max 25 mg) as a single IV bolus over 5–10 seconds, within 4.5 h of last known well, after CT excludes hemorrhage and BP is under 185/110 — stroke team decision",p:{k:0.25,u:"mg",max:25,f:"single IV bolus (0.25 mg/kg, max 25 mg)"},preg:"Specialist decision; pregnancy is not an absolute contraindication.",note:"2026 AHA/ASA Class 1 alternative to alteplase; single bolus. No antiplatelet or anticoagulant for 24 h after. BP under 180/105 for 24 h; do not lower below 140 systolic.",tags:[]},
+ altep:{n:"Alteplase (stroke)",r:"IV",a:"0.9 mg/kg (max 90 mg): 10% as an IV bolus over 1 minute, the rest over 60 minutes — stroke team decision",p:{k:0.9,u:"mg",max:90,f:"10% bolus then the rest over 60 min"},preg:"Specialist decision.",note:"Same eligibility as tenecteplase.",tags:[]},
+ clopL:{n:"Clopidogrel (loading, stroke / TIA)",r:"PO",a:"300 mg once, then 75 mg daily (with aspirin 75–100 mg daily) for 21 days, then single antiplatelet — minor non-disabling stroke (NIHSS 0–3) or high-risk TIA (ABCD² 4 or more), started within 24 h of onset, after CT excludes hemorrhage",af:16,p:null,preg:"Specialist advice.",tags:[]},
+ ticaL:{n:"Ticagrelor (loading, stroke / TIA)",r:"PO",a:"180 mg once, then 90 mg twice daily with aspirin for 30 days — alternative to clopidogrel for minor stroke or high-risk TIA (especially if clopidogrel non-responder or CYP2C19 loss-of-function)",af:18,p:null,preg:"Avoid.",tags:[]},
+ nicard:{n:"Nicardipine infusion",r:"IV",a:"5 mg/h, increase by 2.5 mg/h every 5–15 minutes to a maximum of 15 mg/h; when the target is reached, reduce to 3 mg/h",p:null,preg:"Specialist advice.",note:"Before lysis: target under 185/110. After lysis or thrombectomy: keep under 180/105 and do NOT lower below 140 systolic (Class 3). No lysis: treat only if over 220/120 (lower by 15% in 24 h).",tags:[]}});
+{const o=(typeof C!=="undefined"?C:[]).find(x=>x&&x.id==="stroke");if(o){
+ Object.assign(o,{n:"Stroke / TIA (AHA/ASA 2026)",imp:"Suspected acute ischemic stroke",spec:"stroke team / neurology",
+ dl:["Stroke","TIA","Transient ischemic attack","Suspected stroke","CVA","Hemiparesis","Facial droop","Slurred speech","Aphasia","Sudden weakness"],
+ info:[{id:"stLkw",l:"Last known well (time from LKW to arrival)",o:["","under 4.5 hours","4.5 to 9 hours","9 to 24 hours","over 24 hours","unknown (woke with symptoms)"],s:v=>v?`last known well ${v}`:""},
+  {id:"stNih",l:"NIHSS (0–42)",num:1,s:v=>v!==""&&v!==undefined?`NIHSS ${v}`:""},{id:"stGlu",l:"Capillary glucose (mmol/L)",num:1,s:v=>v?`glucose ${v} mmol/L`:""},
+  {id:"stAC",l:"Anticoagulant",o:["","none","warfarin","DOAC — last dose under 48 h ago","DOAC — last dose over 48 h ago","heparin or enoxaparin in the last 24 h"],s:v=>v&&v!=="none"?`on ${v}`:""},
+  {id:"stCt",l:"CT head",o:["","not yet done","no hemorrhage, no early ischemic change","no hemorrhage, early ischemic change (ASPECTS 6–10)","no hemorrhage, large early ischemic change (ASPECTS 3–5)","intracranial hemorrhage","other (mass, abscess)"],s:v=>v&&v!=="not yet done"?`CT head: ${v}`:""},
+  {id:"stCta",l:"CT angiogram",o:["","not done","no large vessel occlusion","ICA or M1 occlusion","M2 or distal occlusion","basilar artery occlusion"],s:v=>v&&v!=="not done"?`CT angiogram: ${v}`:""},
+  {id:"stDtn",l:"Door-to-needle (minutes)",num:1,s:v=>v?`door-to-needle ${v} min`:""}],
+ ask:[["lkw","Last known well within 4.5 hours","Last known well within 4.5 h","Last known well more than 4.5 h ago",{req:1,a:"Thrombolysis window: stroke code now; tenecteplase 0.25 mg/kg or alteplase 0.9 mg/kg after CT. Do not wait for advanced imaging or for labs other than glucose (and INR if on warfarin)."}],
+  ["stDis","Deficit is disabling (would affect work, walking, speech, vision or hand use), whatever the NIHSS","Disabling deficit","Non-disabling deficit",{req:1,a:"2026: treat disabling deficits within 4.5 h regardless of NIHSS. Non-disabling minor stroke (NIHSS 0–5 and not disabling): no lysis (Class 3); dual antiplatelet instead."}],
+  ["stWake","Woke with symptoms, or onset 4.5 to 9 hours ago","Wake-up or 4.5–9 h stroke","Not a wake-up or 4.5–9 h presentation",{a:"CT perfusion or MRI (DWI–FLAIR mismatch, or perfusion mismatch ratio ≥1.2 with core under 70 mL): thrombolysis may be reasonable (Class 2a); thrombectomy if large vessel occlusion."}],
+  ["res","Symptoms fully resolved (TIA)","Symptoms fully resolved","Symptoms ongoing",{a:"TIA: CT or MRI, ECG, carotid imaging within 24 h; dual antiplatelet if ABCD² 4 or more; specialist review within 24 h; no driving."}],
+  ["acS","On an anticoagulant","On an anticoagulant","Not anticoagulated",{req:1,a:"Warfarin: lysis only if INR 1.7 or less. DOAC within 48 h: no lysis unless a specific assay is normal (anti-Xa, dTT); thrombectomy is still possible. Reversal (idarucizumab) before lysis is a specialist decision."}],
+  ["szS","Seizure at onset","Seizure at onset","No seizure at onset",{a:"Post-ictal (Todd's) paresis mimics stroke, but a seizure at onset does not exclude lysis if the deficit is from stroke on imaging."}],
+  ["headS","Sudden severe headache, vomiting or neck stiffness","Sudden severe headache","No severe headache",{a:"Hemorrhage or SAH: CT; if CT negative and SAH suspected, LP or CTA."}],
+  ["stBleed","Bleeding in the last 3 weeks, major surgery or head trauma in the last 3 months, previous intracranial hemorrhage, or known intracranial tumor or aneurysm","Bleeding risk factor present","No bleeding risk factor",{a:"Relative or absolute contraindication to lysis: list it for the stroke team; thrombectomy may still be possible."}],
+  ["stStroke3","Ischemic stroke in the last 3 months","Recent ischemic stroke (3 months)","No stroke in the last 3 months",{a:"Relative contraindication to lysis: weigh severity and timing."}],
+  ["stBP","Blood pressure over 185/110 on arrival","BP over 185/110","BP under 185/110",{a:"Lower to under 185/110 before lysis (labetalol 10–20 mg IV or nicardipine infusion); if it cannot be controlled, lysis is not given."}],
+  ["stAF","Known atrial fibrillation, mechanical valve or recent myocardial infarction","Cardioembolic source","No known cardioembolic source",{a:"Cardioembolic: anticoagulation after hemorrhage is excluded, timed by infarct size (specialist); not in the acute phase."}],
+  ["stMimic","Hypoglycemia, migraine aura, seizure, functional symptoms or Bell's palsy considered","Stroke mimic considered","Mimics considered and not favored",{a:"Check glucose first; lysis is still reasonable when a mimic cannot be excluded quickly (low bleeding risk in mimics)."}],
+  ["dur60","TIA symptoms lasted 60 minutes or more","Symptoms lasted 60 min or more","Symptoms lasted under 60 min",{cond:p=>true}],["dur10","TIA symptoms lasted 10–59 minutes","Symptoms lasted 10–59 min","Symptoms did not last 10–59 min"],
+  ["locS","Loss of consciousness or syncope","Loss of consciousness or syncope","No loss of consciousness"]],
+ exam:[["face","Facial weakness (asymmetric)","Asymmetric facial weakness","No facial weakness"],["arm","Arm weakness or drift (asymmetric)","Asymmetric arm weakness","No arm weakness"],["leg","Leg weakness (asymmetric)","Asymmetric leg weakness","No leg weakness"],
+  ["speech","Speech disturbance (dysarthria or aphasia)","Speech disturbance","Speech normal"],["vf","Visual field defect","Visual field defect","Visual fields full"],
+  ["stGaze","Forced gaze deviation or neglect (cortical signs)","Gaze deviation or neglect","No gaze deviation or neglect",{a:"Cortical signs with NIHSS 6 or more suggest a large vessel occlusion: CT angiogram and thrombectomy center."}],
+  ["stPost","Vertigo, ataxia, diplopia, dysphagia or reduced consciousness (posterior circulation)","Posterior circulation signs","No posterior circulation signs",{a:"Basilar occlusion: CT angiogram; thrombectomy within 24 h when NIHSS 10 or more (Class 1)."}],
+  ["stSwal","Bedside swallow screen done","Swallow screen done","Swallow screen not yet done",{an:"Nil by mouth (including tablets) until a formal swallow screen is passed (Class 1)."}]],
+ inv:[["Capillary glucose immediately (the only test that must precede lysis; INR if on warfarin)",1],["Non-contrast CT head within 20 minutes of arrival",1],["CT angiogram (arch to vertex) with the first CT in every candidate for thrombectomy (6–24 h, NIHSS 6 or more, or posterior signs)",1],["CT perfusion or MRI (DWI–FLAIR) for wake-up or 4.5–24 h presentations",0],["ECG (atrial fibrillation), troponin",1],["FBC, U&E, coagulation, lipids, HbA1c (do not delay lysis for results)",1],["Swallow screen before anything by mouth",1],["Carotid imaging within 24 h (TIA or minor stroke)",0]],
+ meds:[["tnk","Within 4.5 h, disabling deficit, CT without hemorrhage, BP under 185/110 (stroke team)"],["altep","Alternative to tenecteplase"],["nicard","BP over 185/110 before lysis; keep under 180/105 after"],["labe","BP control before or after lysis (10–20 mg IV)"],["aspT","Ischemic stroke not thrombolyzed: aspirin 300 mg within 24–48 h after CT; TIA"],["clopL","Minor stroke (NIHSS 0–3) or high-risk TIA (ABCD² 4 or more): dual antiplatelet 21 days, started within 24 h"],["ticaL","Alternative dual antiplatelet for 30 days"]],
+ ifc:["THROMBOLYSIS (2026 Class 1): tenecteplase 0.25 mg/kg (max 25 mg) single bolus or alteplase 0.9 mg/kg within 4.5 h of last known well for disabling deficits — no NIHSS minimum, no advanced imaging needed, do not wait for labs except glucose; door-to-CT under 20 minutes, door-to-needle under 60 minutes (aim 45)",
+  "4.5–9 h or wake-up stroke: thrombolysis may be reasonable (Class 2a) with DWI–FLAIR mismatch or perfusion mismatch (ratio 1.2 or more, core under 70 mL); 4.5–24 h with a large vessel occlusion that cannot have thrombectomy: lysis may be considered (Class 2b)",
+  "THROMBECTOMY (Class 1): large vessel occlusion (ICA, M1) within 24 h; 6–24 h with age under 80, NIHSS 6 or more, ASPECTS 3–5 (large core) without major mass effect; basilar occlusion within 24 h with NIHSS 10 or more; give thrombolysis first when eligible and do not delay it for the transfer; medium or distal vessels: weaker evidence",
+  "NO LYSIS: non-disabling minor stroke (Class 3), hemorrhage on CT, DOAC in the last 48 h without a normal specific assay, warfarin with INR over 1.7, BP that cannot be lowered under 185/110, recent intracranial surgery or bleed, active bleeding, platelets under 100, glucose under 2.8 mmol/L (treat first) — thrombectomy may still be possible",
+  "BLOOD PRESSURE: before lysis under 185/110; after lysis or thrombectomy under 180/105 for 24 h and do NOT lower below 140 systolic (Class 3, worse outcomes); no lysis: treat only if over 220/120, lowering by 15% in the first 24 h (permissive hypertension); labetalol or nicardipine",
+  "GLUCOSE: treat under 3.3 mmol/L immediately; target 7.8–10 mmol/L (140–180 mg/dL); intensive insulin to 4.4–7.2 is not recommended (Class 3); temperature over 38 °C: find the cause and treat; head of bed 30° with the head midline; keep SpO2 above 94%, no routine oxygen",
+  "ANTIPLATELETS: aspirin within 24–48 h (after CT; 24 h after lysis); minor non-disabling stroke (NIHSS 0–3) or high-risk TIA (ABCD² 4 or more): aspirin plus clopidogrel (300 mg load) for 21 days starting within 24 h (Class 1), or aspirin plus ticagrelor for 30 days; no acute heparin or LMWH for non-cardioembolic stroke (Class 3); atrial fibrillation: anticoagulate after hemorrhage is excluded, timing by infarct size (specialist)",
+  "SYSTEM: stroke code at the door, mobile stroke unit where available (Class 1), direct transport to a thrombectomy-capable center when a rapid transfer system is absent; swallow screen before anything by mouth (Class 1); no prophylactic antiepileptics (Class 3); statin at high intensity before discharge; carotid imaging within 24 h for TIA or minor stroke; no driving until specialist review",
+  "TIA: ABCD² guides the risk but every suspected TIA is assessed by a specialist within 24 h; imaging (CT or MRI), ECG, carotid imaging; dual antiplatelet if ABCD² 4 or more or crescendo TIA; anticoagulation for atrial fibrillation"],
+ ret:["new or returning weakness, numbness, facial droop, speech or vision problems, severe headache or confusion (call 997 — do not drive)","difficulty swallowing, choking or a new cough after eating or drinking","chest pain, palpitations or fainting"]});
+ /* score: ROSIER, ABCD², NIHSS and the 2026 eligibility summary */
+ o.score=c=>{const g=(k)=>{const v=c.i?c.i(k):"";return v===undefined?"":String(v)};const nih=+g("stNih"),lkw=g("stLkw"),ac=g("stAC"),ct=g("stCt"),cta=g("stCta"),glu=+g("stGlu");
+  const exam=["face","arm","leg","speech","vf","locS","szS"].some(x=>c.a(x));let t="",line="";
+  if(exam){const ro=yes(c,["face","arm","leg","speech","vf"]).length-yes(c,["locS","szS"]).length;t+=`ROSIER <b>${ro}</b>: ${ro>0?"stroke likely":"stroke unlikely, not excluded"}. `;line+=`ROSIER ${ro}. `}
+  if(c.a("res")==="y"){const ab=(c.pt.ageY>=60?1:0)+((c.v.sbp>=140)||(c.v.dbp>=90)?1:0)+(c.a("arm")==="y"||c.a("leg")==="y"||c.a("face")==="y"?2:c.a("speech")==="y"?1:0)+(c.a("dur60")==="y"?2:c.a("dur10")==="y"?1:0)+(c.pt.hx.has("dm")?1:0);t+=`ABCD² <b>${ab}</b>${ab>=4?" (high risk: dual antiplatelet, specialist within 24 h)":" (specialist within 24 h regardless)"}. `;line+=`ABCD² ${ab}. `}
+  if(!isNaN(nih)&&g("stNih")!=="")t+=`NIHSS <b>${nih}</b> (${nih<=3?"minor":nih<=15?"moderate":nih<=20?"moderate to severe":"severe"}). `;
+  /* eligibility */
+  const dis=c.a("stDis"),hem=/^intracranial hemorrhage/.test(ct),big=/ASPECTS 3/.test(ct),lvo=/ICA|M1|basilar/.test(cta),bas=/basilar/.test(cta),doac48=/DOAC — last dose under 48/.test(ac),warf=/warfarin/.test(ac);
+  const E=[];
+  if(hem)E.push("<b style='color:#c62828'>Hemorrhage on CT: no thrombolysis; follow the ICH pathway (BP under 140–160, reverse anticoagulation).</b>");
+  else{
+   if(lkw==="under 4.5 hours"){if(dis==="n")E.push("Under 4.5 h but non-disabling: <b>no thrombolysis</b> (Class 3); dual antiplatelet if NIHSS 0–3.");else if(doac48)E.push("Under 4.5 h on a DOAC within 48 h: <b>no thrombolysis</b> unless a specific assay is normal; thrombectomy if LVO.");else if(c.a("stBP")==="y")E.push("Under 4.5 h: lower BP under 185/110 first, then <b>tenecteplase 0.25 mg/kg</b> (or alteplase).");else E.push(`Under 4.5 h${dis==="y"?" with a disabling deficit":""}: <b>thrombolysis now — tenecteplase 0.25 mg/kg (max 25 mg) or alteplase 0.9 mg/kg</b>${warf?" if INR 1.7 or less":""}, after CT; do not wait for advanced imaging.`)}
+   else if(lkw==="4.5 to 9 hours"||lkw==="unknown (woke with symptoms)")E.push("4.5–9 h or wake-up: <b>CT perfusion or MRI</b>; thrombolysis may be reasonable with mismatch (Class 2a); thrombectomy if LVO.");
+   else if(lkw==="9 to 24 hours")E.push("9–24 h: no thrombolysis unless LVO without thrombectomy access (Class 2b); <b>thrombectomy to 24 h</b> if LVO with salvageable tissue.");
+   else if(lkw==="over 24 hours")E.push("Over 24 h: no reperfusion therapy; antiplatelet, stroke unit, secondary prevention.");
+   if(lvo)E.push(bas?`<b>Basilar occlusion:</b> thrombectomy within 24 h${!isNaN(nih)&&nih>=10?" (NIHSS 10 or more: Class 1)":" (Class 1 when NIHSS 10 or more)"}; call the thrombectomy center now.`:`<b>Large vessel occlusion:</b> thrombectomy within 24 h${big?" — large core (ASPECTS 3–5) still eligible if under 80 and NIHSS 6 or more":""}; give thrombolysis first if eligible and transfer without delay.`);
+   else if(!isNaN(nih)&&nih>=6&&cta==="")E.push("NIHSS 6 or more: <b>CT angiogram now</b> (thrombectomy candidate).");
+  }
+  if(!isNaN(glu)&&g("stGlu")!==""&&glu<3.3)E.push("<b>Glucose under 3.3 mmol/L: treat and reassess before anything else.</b>");
+  if(c.a("stSwal")!=="y")E.push("Nil by mouth until the swallow screen is passed.");
+  if(E.length)t+="<br>"+E.join("<br>");
+  if(!t)t="Answer the examination items and enter last known well, NIHSS and glucose: the 2026 pathway is shown here.";
+  return {t,line:line.trim(),al:(/thrombolysis now|thrombectomy|Hemorrhage/.test(t))?"stop":null}};
+ try{if(typeof SX_ORIG!=="undefined"){const x={};SX_KEYS.forEach(k=>{if(Array.isArray(o[k]))x[k]=o[k].slice()});SX_ORIG.set(o,x)}}catch(e){}
+ if(typeof CMAP!=="undefined")CMAP.stroke=o;try{(o.dl||[]).forEach(d=>{if(!DXL.some(x=>x[0]===d&&x[1]==="stroke"))DXL.push([d,"stroke"])})}catch(e){}try{if(o.spec)CC2SPEC.stroke=o.spec}catch(e){}
+}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
