@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v189";
+const ER_VERSION="v190";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -18879,5 +18879,12 @@ if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){const B=_t(J);
 /* on the colored copy, a normal examination line is never red even if a wrapper marked it */
 {const _l=c3Line;c3Line=function(t,k,sec,age){try{if(/^EXAMINATION/i.test(String(sec||""))&&k==="pos"&&c3IsNormalLine(t))return c3span("b",t)}catch(e){}return _l(t,k,sec,age)}}
 {const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n",'RULES\n0h. Normal examination findings are written as normal ("Chest: equal air entry bilaterally, normal vesicular breath sounds, no wheeze or crackles") with kind "plain", never "pos"; only abnormal findings are "pos".\n')}}
+/* p212 — ntfy topic built in: no pasting, same on every version and every browser. "Remove" only clears a custom URL; the built-in topic comes back. */
+const WH_DEFAULT_URL="https://ntfy.sh/er-notes-ahmed-7f3k9q2";
+{let u="";try{u=localStorage.getItem("erWhUrl")||""}catch(e){}
+ if(!/^https:\/\//.test(u)){WH.url=WH_DEFAULT_URL;WH.fmt="ntfy";try{localStorage.setItem("erWhUrl",WH.url);localStorage.setItem("erWhFmt","ntfy")}catch(e){}}
+ const ui=$("whUrl"),fs=$("whFmt");if(ui)ui.value=WH.url;if(fs)fs.value=WH.fmt;
+ if($("whDel"))$("whDel").onclick=()=>{WH.url=WH_DEFAULT_URL;WH.fmt="ntfy";if($("whUrl"))$("whUrl").value=WH.url;if($("whFmt"))$("whFmt").value="ntfy";try{localStorage.setItem("erWhUrl",WH.url);localStorage.setItem("erWhFmt","ntfy")}catch(e){}notify("Back to the built-in ntfy topic.")};
+ const p=$("whSet")&&$("whSet").querySelector("summary");if(p)p.insertAdjacentHTML("afterend",`<p class="mini"><b>Built in:</b> every saved note goes to <a href="${WH_DEFAULT_URL}" target="_blank" rel="noopener">${WH_DEFAULT_URL}</a> automatically on every version — nothing to paste. Open that address on the PC (or the ntfy app) to read the notes.</p>`)}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
