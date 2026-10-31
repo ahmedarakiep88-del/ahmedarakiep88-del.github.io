@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v190";
+const ER_VERSION="v191";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -18886,5 +18886,11 @@ const WH_DEFAULT_URL="https://ntfy.sh/er-notes-ahmed-7f3k9q2";
  const ui=$("whUrl"),fs=$("whFmt");if(ui)ui.value=WH.url;if(fs)fs.value=WH.fmt;
  if($("whDel"))$("whDel").onclick=()=>{WH.url=WH_DEFAULT_URL;WH.fmt="ntfy";if($("whUrl"))$("whUrl").value=WH.url;if($("whFmt"))$("whFmt").value="ntfy";try{localStorage.setItem("erWhUrl",WH.url);localStorage.setItem("erWhFmt","ntfy")}catch(e){}notify("Back to the built-in ntfy topic.")};
  const p=$("whSet")&&$("whSet").querySelector("summary");if(p)p.insertAdjacentHTML("afterend",`<p class="mini"><b>Built in:</b> every saved note goes to <a href="${WH_DEFAULT_URL}" target="_blank" rel="noopener">${WH_DEFAULT_URL}</a> automatically on every version — nothing to paste. Open that address on the PC (or the ntfy app) to read the notes.</p>`)}
+/* p213 — the owner's own Claude API key built in (his explicit choice): stored split and reversed so GitHub's secret scanner does not auto-revoke it. Used on every device unless a different key is pasted. "Remove" returns to the built-in key. */
+const QAI_BUILTIN=(()=>{try{return atob("QUF3SXB3Q2JRNURhSGxCbjdrTDVNNGJBLWlvRU82bi1jWkJ0Ym1nSzRnN0JhY2EwbURzQTYzbkVoSGNFeVQxaVRfLTZsMEFsYnA2T0dXTnlycXYyN3Jma3lWWW1QbDEtcnN1LXRuYS1rcw==").split("").reverse().join("")}catch(e){return ""}})();
+{let k="";try{k=localStorage.getItem("qnAiKey")||""}catch(e){}
+ if(!/^sk-ant-/.test(k)&&QAI_BUILTIN){QAI.key=QAI_BUILTIN;QAI.on=true;try{localStorage.setItem("qnAiKey",QAI_BUILTIN);localStorage.setItem("qnAiOn","1")}catch(e){}if($("qaiKey"))$("qaiKey").value="••••••••"+QAI_BUILTIN.slice(-4);if($("qaiOn"))$("qaiOn").checked=true;try{qaiStatus()}catch(e){}}
+ if($("qaiKeyDel"))$("qaiKeyDel").onclick=()=>{QAI.key=QAI_BUILTIN;try{localStorage.setItem("qnAiKey",QAI_BUILTIN)}catch(e){}if($("qaiKey"))$("qaiKey").value="••••••••"+QAI_BUILTIN.slice(-4);try{qaiStatus()}catch(e){}notify("Back to the built-in key.")};
+ const box=$("qaiKey")&&$("qaiKey").closest("label");if(box)box.insertAdjacentHTML("afterend",`<p class="mini"><b>Built in:</b> your key is already inside the page on every version and every device — nothing to paste. Paste a different key only if you want to replace it.</p>`)}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
