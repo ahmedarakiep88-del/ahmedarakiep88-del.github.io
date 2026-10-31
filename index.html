@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v186";
+const ER_VERSION="v189";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -18723,7 +18723,7 @@ async function tgSendNote(id,html,text){if(!tgReady()||!TG.auto)return;const bod
 /* saves and updates of the quick note go through here, 3 s after the last change */
 {let tm=null;const _add=qnAdd;qnAdd=function(text,html,src){const r=_add(text,html,src);try{if(src!=="quick"||!TG.auto||!tgReady())return r;
   let id="";try{const a=qnLoad();const x=a.find(n=>n.text===text)||a[0];id=x&&x.id||""}catch(e){}if(!id)id="n_"+tgHash(text).slice(0,6);
-  clearTimeout(tm);tm=setTimeout(()=>tgSendNote(id,html,text),3000)}catch(e){}return r}}
+  clearTimeout(tm);tm=setTimeout(()=>tgSendNote(id,html,text),TG.fast?300:3000);TG.fast=false}catch(e){}return r}}
 /* a new patient starts a new message */
 document.addEventListener("click",e=>{if(e.target.closest("#qnClear,#newPt"))TG.cur=null},true);
 /* p204 — safety netting whenever the patient is discharged (never when no disposition was stated); complaints and past history always bold and colored, in the rule-based note and in Claude's */
@@ -18836,5 +18836,48 @@ function tgMd(html){/* Telegram-style HTML → Discord markdown */return tgFromH
   say("delivered",true);return true}catch(e){say("failed: "+(e&&e.message||"blocked"),false);return false}}}
 {const sel=$("whFmt");if(sel){sel.insertAdjacentHTML("beforeend",`<option value="discord"${WH.fmt==="discord"?" selected":""}>Discord webhook (no Microsoft)</option><option value="ntfy"${WH.fmt==="ntfy"?" selected":""}>ntfy.sh topic (no account at all)</option>`);sel.value=WH.fmt;
  const p=$("whSet")&&$("whSet").querySelector("p.mini");if(p)p.insertAdjacentHTML("afterend",`<p class="mini"><b>Discord:</b> free account, works in any browser; in your server → channel settings → Integrations → Webhooks → New webhook → Copy URL. The note arrives as a message plus the colored HTML file. <b>ntfy.sh:</b> no account; type a long private topic name (e.g. https://ntfy.sh/er-notes-ahmed-7f3k9q2) here and open the same address on the PC; the note and the colored file appear there instantly.</p>`)}}
+/* p209 — API cost control: Claude is called once per note (when you stop dictating or 10 s after the last change), not at every pause; a cheaper model can be chosen; the spend is counted and shown */
+QAI.idleMs=10000;QAI.model=(()=>{try{return localStorage.getItem("qnAiModel")||"claude-sonnet-5-5"}catch(e){return "claude-sonnet-5-5"}})();
+QAI.usage=(()=>{try{return JSON.parse(localStorage.getItem("qnAiUsage")||'{"calls":0,"in":0,"out":0}')}catch(e){return {calls:0,in:0,out:0}}})();
+const QAI_PRICE={"claude-sonnet-5-5":[3,15],"claude-haiku-5-5":[0.8,4]};/* USD per million tokens (approximate) */
+function qaiCost(){const p=QAI_PRICE[QAI.model]||[3,15];return (QAI.usage.in*p[0]+QAI.usage.out*p[1])/1e6}
+function qaiUsageDraw(){const el=$("qaiUse");if(!el)return;el.textContent=`This browser: ${QAI.usage.calls} Claude call${QAI.usage.calls===1?"":"s"}, about $${qaiCost().toFixed(2)} (${QAI.model.replace("claude-","")}).`}
+/* every scheduled run waits for a real pause; runs while the microphone is still listening are postponed */
+{const _sch=qaiSchedule;qaiSchedule=function(ms){if(ms<QAI.idleMs)ms=QAI.idleMs;return _sch(ms)}}
+{const _run=qaiRun;qaiRun=async function(force){if(!force&&QV&&QV.on){qaiSchedule(QAI.idleMs);return}return _run(force)}}
+/* the microphone stopping is the moment to write */
+{const _stop=qvStop;qvStop=function(){_stop();try{if(QAI.on&&qaiProv()&&$("qnIn").value.trim())qaiSchedule(1500)}catch(e){}}}
+/* the API call uses the chosen model and counts the tokens */
+{const _call=qaiCall;qaiCall=async function(prompt,signal){if(QAI.sample)return _call(prompt,signal);if(!QAI.key)return _call(prompt,signal);
+ const res=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",signal,headers:{"content-type":"application/json","x-api-key":QAI.key,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"},body:JSON.stringify({model:QAI.model,max_tokens:6000,messages:[{role:"user",content:prompt}]})});
+ if(!res.ok){let t="";try{t=await res.text()}catch(e){}let msg=t.slice(0,240);try{const j=JSON.parse(t);msg=(j.error&&j.error.message)||msg}catch(e){}throw {code:"http_"+res.status,message:msg}}
+ const j=await res.json();try{QAI.usage.calls++;QAI.usage.in+=(j.usage&&j.usage.input_tokens)||0;QAI.usage.out+=(j.usage&&j.usage.output_tokens)||0;localStorage.setItem("qnAiUsage",JSON.stringify(QAI.usage));qaiUsageDraw()}catch(e){}
+ if(j.stop_reason==="max_tokens")throw {code:"truncated",message:"the answer was cut short"};return (j.content||[]).map(c=>c.text||"").join("")}}
+/* settings: model and spend */
+{const box=$("qaiSet");if(box){box.insertAdjacentHTML("beforeend",`<div class="grid wide" style="margin-top:6px"><label class="f">Model (API key only)<select id="qaiModel"><option value="claude-sonnet-5-5"${QAI.model==="claude-sonnet-5-5"?" selected":""}>Sonnet 5.5 — best quality (~2–4 cents per note)</option><option value="claude-haiku-5-5"${QAI.model==="claude-haiku-5-5"?" selected":""}>Haiku 5.5 — 4× cheaper (~1 cent per note)</option></select></label></div><p class="mini" id="qaiUse"></p><p class="mini">Claude is now called once per note: when the microphone stops, or 10 seconds after your last change, and once more only if you change the note afterwards. The Rewrite now button always calls it.</p>`);
+ $("qaiModel").onchange=()=>{QAI.model=$("qaiModel").value;try{localStorage.setItem("qnAiModel",QAI.model)}catch(e){}qaiUsageDraw()};qaiUsageDraw()}}
+/* p210 — "save" heard as "safe", "saif", "safe it", "save note", "saved" …: all of them end the dictation, run Claude once and send immediately */
+const QV_SAVE2=/(?:^|[\s,.;:])(?:and\s+)?(?:save|safe|saif|saved|sav|say ?v|save it|safe it|save this|safe this|save (?:the )?note|safe (?:the )?note|save to (?:the )?board|safe to (?:the )?board|safety)\s*[.!?]?\s*$/i;
+/* microphone path: normalize the last word before the existing "save" check */
+{const _apply=qvApply;qvApply=function(extra){try{if(!extra&&QV_SAVE2.test(QV.fin)&&!/\bsave\s*[.!]?\s*$/i.test(QV.fin))QV.fin=QV.fin.replace(QV_SAVE2,m=>m.replace(/[a-z ]+$/i," save"))}catch(e){}return _apply(extra)}}
+/* keyboard dictation path */
+{let tm=null;$("qnIn").addEventListener("input",()=>{if(QV.on)return;clearTimeout(tm);const ta=$("qnIn");const v=ta.value;if(!QV_SAVE2.test(v)||/\bsave\s*[.!]?\s*$/i.test(v)||v.trim().split(/\s+/).length<4)return;
+ tm=setTimeout(()=>{const t=ta.value;if(!QV_SAVE2.test(t))return;ta.value=t.replace(QV_SAVE2,"").replace(/[\s,;:]+$/,"");try{qnRun()}catch(e){}qvSaveNow()},1500)})}
+/* after "save" the send is immediate (no 3 s wait) */
+{const _s=qvSaveNow;qvSaveNow=function(){TG.fast=true;setTimeout(()=>{TG.fast=true},0);return _s()}}
+{const _add=qnAdd;qnAdd=function(text,html,src){if(src==="quick"&&QV_SAVE_FAST)TG.fast=true;return _add(text,html,src)}}
+let QV_SAVE_FAST=false;{const _s=qvSaveNow;qvSaveNow=function(){QV_SAVE_FAST=true;setTimeout(()=>{QV_SAVE_FAST=false},90000);return _s()}}
+/* p211 — normal findings are written as normal and never in red: "vesicular breath sounds" → "normal vesicular breath sounds"; a chest/abdomen/neuro line that contains only normal findings is colored as normal */
+const C3_NORMAL_LINE=/^(?:Chest|Lungs|Respiratory|Abdomen|Abdominal|Heart|Cardiovascular|CVS|Neuro(?:logical)?|CNS|Throat|Ears?|ENT|Neck|Back|Skin|Eyes?|Joint|Limb|Extremities)\b[^:]*:?\s*(?:[^.]*\b(?:normal|clear|equal air entry|vesicular|no wheeze|no crackles|soft|lax|non-tender|no guarding|no rebound|no organomegaly|intact|full range|regular|no murmur|S1 S2|unremarkable|no focal|GCS 15|central|no erythema|no exudate|no lymphadenopathy|no stiffness|no recession|no distress|pink|warm|well perfused)\b[^.]*\.?\s*)+$/i;
+const C3_ABNORMAL_WORD=/\b(?:inflam\w*|congest\w*|enlarged|bulging|injected|stones?|gallstones|consolidation|fracture|tender(?:ness)?(?! on)|guarding|rebound|rigid|distended|mass|wheeze(?!\s*or)|crackles(?!\s*;)|crepitations|reduced air entry|decreased air entry|absent breath|bronchial breathing|dull|stridor|recession(?! ;)|murmur(?! heard)?|gallop|raised JVP|deformity|swelling|erythema(?! or)|exudate(?!\s*;)|pus|discharge|bleeding|weakness|numbness|deficit|drowsy|confused|rash|ulcer|laceration|bruis|hematoma|effusion|pallor|cyanosis|jaundice|icterus|clubbing|lymphadenopathy(?! ;)|positive|abnormal|unequal|asymmetr|reduced|limited|restricted|tachy|brady|hypotens|hypertens|febrile|fever)\b/i;
+function c3IsNormalLine(t){const s=String(t||"");if(!/^(?:Chest|Lungs|Respiratory|Abdomen|Abdominal|Heart|Cardiovascular|CVS|Neuro(?:logical)?|CNS|Throat|Ears?|ENT|Neck|Back|Skin|Eyes?|Joint|Limb|Extremities|Examination)\b[^:]{0,20}:?/i.test(s))return false;if(!/\b(?:normal|clear|equal air entry|vesicular|soft|lax|non-tender|intact|unremarkable|no )/i.test(s))return false;const body=s.replace(/^[A-Z][A-Za-z ]{1,25}:?\s*/,"");
+ /* remove the negated findings ("no wheeze or crackles"), then look for anything abnormal left */const stripped=body.replace(/\b(?:no|not|without|nil|non-)\s+[a-z ,-]+?(?=[.;,]|$)/gi,"").replace(/\bno (?:wheeze or crackles|guarding or rebound tenderness|organomegaly|recession|focal neurological deficit|neck stiffness|murmurs?)\b/gi,"");
+ return !C3_ABNORMAL_WORD.test(stripped)}
+function c3NormFix(B){let sec="";B.L.forEach(z=>{if(z[1]==="h"){sec=z[0];return}if(!z[0])return;z[0]=z[0].replace(/\b(?<!normal )vesicular breath sounds\b/gi,"normal vesicular breath sounds").replace(/\bnormal normal vesicular\b/gi,"normal vesicular");if(sec==="EXAMINATION"&&z[1]==="pos"&&!/^(?:Chest X-ray|X-ray|Ultrasound|CT|MRI|ECG|Results?)\b/i.test(z[0])&&c3IsNormalLine(z[0]))z[1]="neg"})}
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{c3NormFix(B)}catch(e){}return B}}
+if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){const B=_t(J);try{c3NormFix(B)}catch(e){}return B}}
+/* on the colored copy, a normal examination line is never red even if a wrapper marked it */
+{const _l=c3Line;c3Line=function(t,k,sec,age){try{if(/^EXAMINATION/i.test(String(sec||""))&&k==="pos"&&c3IsNormalLine(t))return c3span("b",t)}catch(e){}return _l(t,k,sec,age)}}
+{const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n",'RULES\n0h. Normal examination findings are written as normal ("Chest: equal air entry bilaterally, normal vesicular breath sounds, no wheeze or crackles") with kind "plain", never "pos"; only abnormal findings are "pos".\n')}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
