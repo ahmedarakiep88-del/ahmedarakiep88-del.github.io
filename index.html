@@ -14739,7 +14739,7 @@ QN_PACKS.push(
   run:c=>{const v=c.num(/\b(?:residual|residual volume|drained|draining|output)\s*(?:of\s*|was\s*)?(\d{2,4})\s*(?:ml|cc)\b/);c.del(/^Residual(?: volume)? \d+ ?(?:ml|cc)\.$/i);c.fix(/^A urinary catheter was inserted\.$/,`A urethral catheter was inserted${v?`, draining a residual volume of ${v} mL`:""}.`);if(v&&!c.has(/catheter was inserted/))c.put("MANAGEMENT",`A urethral catheter was inserted, draining a residual volume of ${v} mL.`,"");
    c.examSet(/^No renal angle tenderness; suprapubic area non-tender\.$/,"No renal angle tenderness.","neg");c.fix(/^The patient was discharged home in a stable condition on catheter\.$/,"The patient was discharged home in a stable condition with the urinary catheter in place.");c.fix(/^The patient was referred to the urology clinic for follow-up\.$/,"The patient was referred to the urology clinic for follow-up and a trial without catheter (TWOC).")},
   imp:c=>{const v=c.num(/\b(?:residual|residual volume|drained|draining|output)\s*(?:of\s*|was\s*)?(\d{2,4})\s*(?:ml|cc)\b/);return `Acute urinary retention${v?` (residual volume ${v} mL)`:""}${/\bbph\b|benign prostatic|prostat/.test(c.rp)?", likely secondary to benign prostatic hyperplasia":/constipat/.test(c.rp)?", likely secondary to constipation":""}`}},
- {id:"stabchest",when:c=>/\b(?:stab|gunshot|penetrating)\w*/.test(c.rp)&&/chest|thorax|thoracic/.test(c.rp),
+ {id:"stabchest",when:c=>/\bstab(?:bed|bing|s)?\b|\bgunshot\w*|\bpenetrating\b/.test(c.rp)&&/chest|thorax|thoracic/.test(c.rp),
   imp:c=>{const sd=c.side("chest|thorax")||"";const sp=c.VT.spo2,hr=c.VT.hr;const bp=c.raw.match(/\b(?:bp|blood pressure)\s*(?:of|is|:|=)?\s*(\d{2,3})\s*\/\s*(\d{2,3})/i);const uns=(bp&&+bp[1]<90)||(hr!=null&&hr>=120);const ra=/reduced air entry|decreased air entry|absent breath sounds|reduced breath sounds/.test(c.rp);const dr=/chest drain|thoracostomy|chest tube/.test(c.rp);return `Penetrating chest trauma (${/gunshot/.test(c.rp)?"gunshot":"stab"} wound to the ${sd?sd+" ":""}chest)${uns?` with hemodynamic instability (${[bp&&`BP ${bp[1]}/${bp[2]}`,hr!=null&&`HR ${hr}`].filter(Boolean).join(", ")})`:""}${ra||(sp!=null&&sp<94)?`; suspected ${sd?sd+" ":""}hemopneumothorax (${[ra&&"reduced air entry",sp!=null&&sp<94&&`SpO2 ${sp}%`].filter(Boolean).join(", ")})`:uns?"; hemothorax or pneumothorax likely":""}${dr?"; chest drain inserted":""}`}},
  {id:"od2",when:c=>/\boverdose\b|\btook \d+ (?:tablets|tabs|pills)|ingested \d+ (?:tablets|tabs|pills)/.test(c.rp),
   run:c=>{const bad=/^(?:yo|y|m|f|male|female|old|an?|the|intentional|accidental|deliberate|took|after|drug|tablets?|pills?|mixed|massive|suspected|possible)$/;const cands=[(c.rp.match(/\b([a-z-]{4,}) overdose\b/)||[])[1],(c.rp.match(/overdose of (?:\d+ (?:tablets|tabs|pills) of )?([a-z-]{4,})/)||[])[1],(c.rp.match(/\b(?:took|ingested) \d+ (?:tablets|tabs|pills) of ([a-z-]{4,})/)||[])[1]].filter(x=>x&&!bad.test(x)&&(qnDrugItem(x)||/^(?:paracetamol|acetaminophen|ibuprofen|aspirin|iron|amitriptyline|sertraline|fluoxetine|citalopram|quetiapine|olanzapine|diazepam|alprazolam|clonazepam|tramadol|codeine|metformin|insulin|warfarin|digoxin|lithium|carbamazepine|valproate|propranolol|amlodipine|chlorpheniramine|diphenhydramine|antihistamine|sleeping)$/.test(x)));const dr=cands[0];const n=c.num(/\b(\d+)\s*(?:tablets|tabs|pills)\b/);const mg=c.num(/\b(?:tablets|tabs|pills)(?: of [a-z-]+)?\s*(?:of\s*)?(\d+(?:\.\d+)?)\s*mg\b/);const ago=(c.rp.match(/\b(\d+(?:\.\d+)? (?:hours?|minutes?|days?) ago)\b/)||[])[1];const intent=/\bintentional|deliberate|suicid\w*|self[- ]harm/.test(c.rp);const acc=/\baccidental\w*/.test(c.rp);
@@ -17935,7 +17935,7 @@ function tgFromHtml(html){let s=String(html||"");
  s=s.replace(/<span class="(?:qnH|c3h)"[^>]*>([\s\S]*?)<\/span>/g,"<b><u>$1</u></b>").replace(/<span class="(?:nred|c3r)"[^>]*>([\s\S]*?)<\/span>/g,"<b>$1</b>").replace(/<span class="(?:nrefz|c3v)"[^>]*>([\s\S]*?)<\/span>/g,"<i>$1</i>").replace(/<span class="(?:nret|ndis)"[^>]*>([\s\S]*?)<\/span>/g,"<b>$1</b>").replace(/<span[^>]*>([\s\S]*?)<\/span>/g,"$1").replace(/<br\s*\/?>/g,"\n").replace(/<(?!\/?[biu]>)[^>]+>/g,"");
  return s.replace(/\n{3,}/g,"\n\n").trim()}
 {const A={id:null,sent:"",tm:null};
- const _add=qnAdd;qnAdd=function(text,html,src){const before=qnLoad().length;const r=_add(text,html,src);try{if(src!=="quick"||!TG.auto||!tgReady())return r;const body=tgFromHtml(html);if(!body||body===A.sent)return r;
+ const _add=qnAdd;qnAdd=function(text,html,src){const before=qnLoad().length;const r=_add(text,html,src);try{if(src!=="quick"||!TG.auto||!tgReady()||TG.v2)return r;const body=tgFromHtml(html);if(!body||body===A.sent)return r;
   const isUpdate=qnLoad().length===before&&!!A.sent;clearTimeout(A.tm);
   const go=()=>{A.sent=body;tgSend((isUpdate?"<b>Updated note</b>\n\n":"")+body)};
   if(isUpdate)A.tm=setTimeout(go,5000);else go()}catch(e){}return r}
@@ -18409,7 +18409,7 @@ $("vsSkip").insertAdjacentHTML("beforebegin",`<button type="button" class="b sm"
 {let tm=null;const box=$("vsIn");box.addEventListener("input",()=>{clearTimeout(tm);tm=setTimeout(()=>{try{const raw=box.value;if(!raw.trim())return;const fixed=voiceSmart(voiceClean(raw));if(vsNorm(fixed)!==vsNorm(raw)){box.value=fixed;$("vsDiff").innerHTML=`Microphone wrote "<b>${esc(raw.trim())}</b>" → corrected to "<b>${esc(fixed)}</b>"`+(vsNorm(fixed)===vsNorm(voiceClean(vsCur()))?" ✓":"");}}catch(e){}},900)})}
 /* p193 — contextual voice corrections: a mis-hearing that is itself a real word ("20 email" = "20 year male", "today's calf 1 day" = "2 days cough 1 day") is learned together with the word before it and applied only in that context; duplicated dictation in the note box is removed; common iPhone mis-hearings built in */
 VOICE_FIX.unshift([/\b(\d{1,3})\s*(?:e-?mails?|e mail|yml|eml|yo male|your male|yo mail)\b/gi,"$1 year male"],[/\b(\d{1,3})\s*(?:yo female|your female|female mail)\b/gi,"$1 year female"],
- [/\btoday'?s\b(?=\s+(?:calf|cough|cuff|fever|pain|vomit\w*|diarrh\w*|headache|rash))/gi,"2 days,"],[/\b(?:calf|cuff|coff)\b(?=\s+(?:\d+\s*days?|dry|productive|with|and|for))/gi,"cough"],[/\bno drooling saliva\b/gi,"no drooling, no difficulty swallowing saliva"],[/\bfever of (\d{2}(?:\.\d)?)\b/gi,"fever $1"]);
+ [/\btoday'?s\b(?=\s+(?:calf|cough|cuff|fever|pain|vomit\w*|diarrh\w*|headache|rash))/gi,"2 days,"],[/\b(?:calf|cuff|coff)\b(?=\s+(?:\d+\s*days?|dry|productive))/gi,"cough"],[/\bno drooling saliva\b/gi,"no drooling, no difficulty swallowing saliva"],[/\bfever of (\d{2}(?:\.\d)?)\b/gi,"fever $1"]);
 /* contextual learning for real-word mis-hearings */
 function vCtxKey(prev,heard){return "ctx:"+(/^\d+$/.test(prev)?"#":prev)+"|"+heard}
 {const _lp=vsLearnPairs;vsLearnPairs=function(got,exp){const all=_lp(got,exp);/* _lp is already filtered by vLearnSafe (p192); recover the unsafe ones with context */
@@ -18459,7 +18459,7 @@ const VOICE_PRINT=[
  [/\bkettle (?:rack|rock|lack|rolac)\b/gi,"ketorolac"],[/\bcricket (?:injection)?\b/gi,m=>m.replace(/cricket/i,"ketorolac")],
  [/\bexodus\b/gi,"exudate"],[/\bexotic\b(?=[^.]{0,20}\b(?:throat|tonsil|pharyn))/gi,"exudate"],[/\b(?:limb|limp) notes?\b/gi,"lymph nodes"],[/\bcervical limb\b/gi,"cervical lymph"],
  [/\b(\d{1,3})\s*(?:e-?mails?|e mail|eml|yml|your mail|yo mail|yo male|email male)\b/gi,"$1 year male"],[/\b(\d{1,3})\s*(?:yo female|your female|email female|e-?mail female)\b/gi,"$1 year female"],
- [/\bcalf\b(?=\s+(?:\d+\s*days?|dry|productive|with|and|for|,))/gi,"cough"],[/\bno rolling\b/gi,"no drooling"],
+ [/\bcalf\b(?=\s+(?:\d+\s*days?|dry|productive))/gi,"cough"],[/\bno rolling\b/gi,"no drooling"],
  [/\bdocumented was\b/gi,"documented"],[/\bfever (?:after|of|at) ([0-9])\.(\d)\b/gi,"fever 3$1.$2"],[/\b30\.(\d)\b(?=[^.]{0,20}\b(?:fever|temp))/gi,"38.$1"],
  [/\bvermillion\b/gi,"vermilion"],[/\bbuckle mucosa\b/gi,"buccal mucosa"],
  [/\bJAHA\b/g,"JHAH"],[/\bjaha\b/gi,"JHAH"],
@@ -18470,6 +18470,9 @@ const VOICE_PRINT=[
 VOICE_FIX.unshift(...VOICE_PRINT);
 /* the same print is applied inside the dictation cleaner, so typed-dictation notes get it even when the box is not rewritten */
 {const _c=qnDictClean;qnDictClean=function(raw){let t=String(raw||"");VOICE_PRINT.forEach(([re,to])=>{t=t.replace(re,to)});return _c(t)}}
+/* "discharge" as the microphone writes it */
+{const DX=[[/\b(?:this|the|a|dis|these) charge[ds]?\b/gi,"discharged"],[/\bdischarge[ds]? (?:the )?patient\b/gi,"discharged"],[/\bdischarge (?:home|him|her)\b/gi,"discharged home"],[/\bdispo(?:sition)?:? discharge[d]?\b/gi,"discharged"],[/\b(?:sent|send|went|go|goes) home\b/gi,"discharged home"],[/\bdischarged? (?:with|on) (?:a )?follow[- ]?up\b/gi,"discharged with follow-up"],[/\bdis charged\b/gi,"discharged"],[/\bdischarges\b/gi,"discharged"]];
+ VOICE_PRINT.push(...DX);VOICE_FIX.unshift(...DX)}
 /* p196 — Painless hematuria: a presentation card with the questions that matter, the examination, the step-by-step investigations (BAUS/NICE-style pathway), the red flags, the ranked differential and the plan */
 regCC({id:"phemat",n:"Painless hematuria",g:"Abdominal & GU",spec:"urology",imp:"Painless visible hematuria, urological malignancy to be excluded",
  dl:["Painless hematuria","Painless haematuria","Blood in the urine without pain","Visible hematuria","Gross hematuria","Frank hematuria","Non-visible hematuria","Microscopic hematuria"],
@@ -18576,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v175";
+const ER_VERSION="v186";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -18659,5 +18662,179 @@ Object.assign(MED,{
  try{if(typeof SX_ORIG!=="undefined"){const x={};SX_KEYS.forEach(k=>{if(Array.isArray(o[k]))x[k]=o[k].slice()});SX_ORIG.set(o,x)}}catch(e){}
  if(typeof CMAP!=="undefined")CMAP.stroke=o;try{(o.dl||[]).forEach(d=>{if(!DXL.some(x=>x[0]===d&&x[1]==="stroke"))DXL.push([d,"stroke"])})}catch(e){}try{if(o.spec)CC2SPEC.stroke=o.spec}catch(e){}
 }}
+/* p200 — the colored note also goes to Telegram as a small HTML file (Telegram text has no colors): open it on the PC, select all, copy, paste into Epic with the colors kept */
+TG.doc=(()=>{try{return localStorage.getItem("erTgDoc")!=="0"}catch(e){return true}})();
+function tgNoteDoc(html,title){const t=String(title||"ER note").replace(/[^\w\- ]+/g," ").trim().slice(0,60)||"ER note";
+ return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(t)}</title><style>body{font:15px/1.55 Arial,Helvetica,sans-serif;margin:16px;max-width:860px;color:#0d47a1}pre{white-space:pre-wrap;font:inherit;margin:0}span.c3h{font-weight:800;text-decoration:underline;color:#000}span.c3r{color:#c62828;font-weight:700}span.c3b{color:#0d47a1}span.c3v{color:#6a1b9a;font-weight:700}.tip{font:12px Arial;color:#777;margin:0 0 10px}</style></head><body><p class="tip">Select all (Ctrl+A), copy (Ctrl+C) and paste into Epic: the colors are kept. ${esc(t)}</p><pre>${String(html||"")}</pre></body></html>`}
+async function tgSendDoc(html,title){if(!tgReady()||!TG.doc)return false;try{const fd=new FormData();fd.append("chat_id",TG.chat);fd.append("document",new Blob([tgNoteDoc(html,title)],{type:"text/html"}),(String(title||"ER note").replace(/[^\w\-]+/g,"_").slice(0,40)||"ER_note")+".html");fd.append("caption","Colored note: open on the PC, select all, copy, paste into Epic.");
+  const r=await fetch(`https://api.telegram.org/bot${TG.tok}/sendDocument`,{method:"POST",body:fd});const j=await r.json().catch(()=>({}));if(!j.ok)throw new Error(j.description||("HTTP "+r.status));tgLast("note sent as text and as a colored file",true);return true}catch(e){tgLast("text sent; colored file could not be sent ("+(e&&e.message||"blocked")+")",false);return false}}
+/* the HTML of the note being sent is remembered and sent right after the text */
+{const _add=qnAdd;qnAdd=function(text,html,src){if(src==="quick"&&!TG.v2)TG.pendingHtml={html:String(html||""),title:(typeof qnTitle==="function"?qnTitle(text):"ER note")};return _add(text,html,src)}}
+{const _send=tgSend;tgSend=async function(text,plain,viaClick){const pend=!plain?TG.pendingHtml:null;TG.pendingHtml=null;const r=await _send(text,plain,viaClick);try{if(pend&&pend.html&&!TG.blocked&&/<span/.test(pend.html))await tgSendDoc(pend.html,pend.title)}catch(e){}return r}}
+/* manual button sends use the current note */
+{const b=$("tgNote");if(b){const _c=b.onclick;b.onclick=()=>{try{if(qnLast&&qnLast.B)TG.pendingHtml={html:qnHTML(qnLast.B,false),title:qnTitle(qnText(qnLast.B))}}catch(e){}return _c&&_c()}}}
+{const box=$("tgSet");if(box&&$("tgAutoAi")){$("tgAutoAi").closest("label").insertAdjacentHTML("afterend",`<label class="mini" style="display:flex;gap:6px;align-items:center;margin-top:4px"><input type="checkbox" id="tgDoc"${TG.doc?" checked":""}> Also send the note as a colored file (open it on the PC and copy into Epic with the colors)</label>`);$("tgDoc").onchange=()=>{TG.doc=$("tgDoc").checked;try{localStorage.setItem("erTgDoc",TG.doc?"1":"0")}catch(e){}}}}
+/* p201 — one press from the iPhone: the page can be opened with the dictated text in the address (?note=…&send=1) — it fills the shorthand, writes the note, saves and sends to Telegram by itself; ?voice=1 opens Quick note with one big button that starts the microphone */
+function erStartFromUrl(){let q;try{q=new URLSearchParams(location.search||"");if(!q.get("note")&&!q.get("voice")&&location.hash){const h=location.hash.replace(/^#\??/,"");q=new URLSearchParams(h)}}catch(e){return}
+ const note=q.get("note"),voice=q.get("voice"),send=q.get("send");if(!note&&!voice)return;
+ try{history.replaceState(null,"",location.pathname)}catch(e){}
+ try{qnShow("quick")}catch(e){}
+ if(note){const ta=$("qnIn");ta.value=String(note).trim();try{VH.last=0}catch(e){}try{qnRun()}catch(e){}
+  if(send==="1"||send==="true"){setTimeout(()=>{try{qvSaveNow()}catch(e){qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick")}},800)}
+  try{notify("Dictated note received"+(send?"; writing, saving and sending…":"."))}catch(e){}return}
+ if(voice){document.body.insertAdjacentHTML("beforeend",`<div id="erGo" style="position:fixed;inset:0;z-index:60;background:#0d47a1;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font:800 1.6rem var(--body)"><div>ER note</div><button type="button" id="erGoB" style="border:0;border-radius:999px;background:#c62828;color:#fff;font:800 1.4rem var(--body);padding:28px 40px;min-width:70%">🎤 Tap to dictate</button><div style="font:600 .9rem var(--body);opacity:.85">say "save" at the end</div><button type="button" id="erGoX" style="border:1px solid #fff;background:transparent;color:#fff;border-radius:999px;padding:8px 18px;font:600 .9rem var(--body)">just open the page</button></div>`);
+  $("erGoB").onclick=()=>{$("erGo").remove();try{qvStart()}catch(e){}};$("erGoX").onclick=()=>$("erGo").remove()}}
+setTimeout(erStartFromUrl,900);
+/* p202 — a fresh note after the phone was locked: when the page comes back after being away for 2 minutes or more, the previous case is kept on the Board (saved as a draft if it was not saved) and the box opens empty, ready to dictate */
+const FRESH={away:0,min:120};
+FRESH.on=(()=>{try{return localStorage.getItem("erFreshOn")!=="0"}catch(e){return true}})();
+function erFreshNote(){try{const ta=$("qnIn");const had=ta.value.trim();
+  if(had&&qnLast&&qnLast.B){/* unsaved work is not lost: it goes to the Board as a draft (no Telegram) */const wasAuto=TG.auto,wasAi=TG.autoAi;TG.auto=false;TG.autoAi=false;try{const a=qnLoad();const saved=a.some(x=>x.raw&&x.raw.trim()===had);if(!saved)qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick")}finally{TG.auto=wasAuto;TG.autoAi=wasAi}}
+  try{$("qnClear").click()}catch(e){ta.value="";try{qnRun()}catch(e2){}}
+  try{if(QAI)QAI.B=null}catch(e){}try{qnShow("quick")}catch(e){}
+  if(QV_PHONE&&!$("erGo")){document.body.insertAdjacentHTML("beforeend",`<div id="erGo" style="position:fixed;inset:0;z-index:60;background:#0d47a1;color:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;font:800 1.6rem var(--body)"><div>New note</div><button type="button" id="erGoB" style="border:0;border-radius:999px;background:#c62828;color:#fff;font:800 1.4rem var(--body);padding:28px 40px;min-width:70%">🎤 Tap to dictate</button><div style="font:600 .9rem var(--body);opacity:.85">say "save" at the end</div><button type="button" id="erGoX" style="border:1px solid #fff;background:transparent;color:#fff;border-radius:999px;padding:8px 18px;font:600 .9rem var(--body)">type instead</button></div>`);
+   $("erGoB").onclick=()=>{$("erGo").remove();try{qvStart()}catch(e){}};$("erGoX").onclick=()=>{$("erGo").remove();try{$("qnIn").focus()}catch(e){}}}
+  notify("New note. The previous one is on the Board.")}catch(e){}}
+document.addEventListener("visibilitychange",()=>{if(document.hidden){FRESH.away=Date.now();return}if(!FRESH.on||!FRESH.away)return;const gone=(Date.now()-FRESH.away)/1000;FRESH.away=0;if(gone>=FRESH.min&&$("qnIn").value.trim())erFreshNote()});
+window.addEventListener("pageshow",e=>{if(e.persisted&&FRESH.on&&FRESH.away&&(Date.now()-FRESH.away)/1000>=FRESH.min&&$("qnIn").value.trim())erFreshNote()});
+/* setting */
+{const vs=document.querySelector(".qnVSet");if(vs)vs.insertAdjacentHTML("beforeend",`<label><input type="checkbox" id="erFreshOn"${FRESH.on?" checked":""}> New note when the phone comes back after 2 minutes (previous one kept on the Board)</label>`);const cb=$("erFreshOn");if(cb)cb.onchange=()=>{FRESH.on=cb.checked;try{localStorage.setItem("erFreshOn",FRESH.on?"1":"0")}catch(e){}}}
+/* p203 — one Telegram message per note: the first send creates the text message and the colored file; every later change EDITS those same messages instead of sending new ones */
+TG.v2=true;TG.msgs=(()=>{try{return JSON.parse(localStorage.getItem("erTgMsgs")||"{}")}catch(e){return {}}})();
+function tgMsgsStore(){try{const keys=Object.keys(TG.msgs);if(keys.length>40)keys.slice(0,keys.length-40).forEach(k=>delete TG.msgs[k]);localStorage.setItem("erTgMsgs",JSON.stringify(TG.msgs))}catch(e){}}
+async function tgApi(method,body){const r=await fetch(`https://api.telegram.org/bot${TG.tok}/${method}`,body instanceof FormData?{method:"POST",body}:{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});const j=await r.json().catch(()=>({}));if(!j.ok){const d=String(j.description||"");if(/not modified/i.test(d))return {ok:true,unchanged:true};const e=new Error(d||("HTTP "+r.status));e.desc=d;throw e}return j}
+function tgHash(s){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;return String(h)}
+async function tgSendNote(id,html,text){if(!tgReady()||!TG.auto)return;const body=tgFromHtml(html);if(!body)return;const h=tgHash(body);const rec=TG.msgs[id];if(rec&&rec.h===h)return;
+ if(TG.blocked===true){tgBarShow(body);return}
+ const title=(typeof qnTitle==="function"?qnTitle(text):"ER note")||"ER note";const fname=(title.replace(/[^\w\-]+/g,"_").slice(0,40)||"ER_note")+".html";
+ try{tgLast("sending…");
+  if(rec&&rec.m){/* edit the existing messages */
+   const chunk=body.length>3900?body.slice(0,3900)+"\n…(see the file)":body;
+   try{await tgApi("editMessageText",{chat_id:TG.chat,message_id:rec.m,text:chunk,parse_mode:"HTML",disable_web_page_preview:true})}catch(e){if(/parse/i.test(e.desc||""))await tgApi("editMessageText",{chat_id:TG.chat,message_id:rec.m,text:chunk.replace(/<[^>]+>/g,"")});else throw e}
+   if(TG.doc&&rec.d){const fd=new FormData();fd.append("chat_id",TG.chat);fd.append("message_id",String(rec.d));fd.append("media",JSON.stringify({type:"document",media:"attach://f",caption:"Colored note (updated): open on the PC, select all, copy, paste into Epic."}));fd.append("f",new Blob([tgNoteDoc(html,title)],{type:"text/html"}),fname);try{await tgApi("editMessageMedia",fd)}catch(e){}}
+   rec.h=h;tgMsgsStore();tgLast("note updated in Telegram (same message)",true);return}
+  /* first send */
+  const chunk=body.length>3900?body.slice(0,3900)+"\n…(see the file)":body;let j;
+  try{j=await tgApi("sendMessage",{chat_id:TG.chat,text:chunk,parse_mode:"HTML",disable_web_page_preview:true})}catch(e){if(/parse/i.test(e.desc||""))j=await tgApi("sendMessage",{chat_id:TG.chat,text:chunk.replace(/<[^>]+>/g,"")});else throw e}
+  const r2={m:j.result&&j.result.message_id,h};
+  if(TG.doc){try{const fd=new FormData();fd.append("chat_id",TG.chat);fd.append("document",new Blob([tgNoteDoc(html,title)],{type:"text/html"}),fname);fd.append("caption","Colored note: open on the PC, select all, copy, paste into Epic.");const jd=await tgApi("sendDocument",fd);r2.d=jd.result&&jd.result.message_id}catch(e){}}
+  TG.msgs[id]=r2;tgMsgsStore();tgLast("sent to Telegram"+(r2.d?" (text + colored file)":""),true);notify("Sent to Telegram.")}
+ catch(e){const m=e&&e.message||"";if(/Failed to fetch|NetworkError|Load failed/i.test(m)){TG.blocked=true;tgBarShow(body);return}tgLast("Telegram did not accept it: "+m,false)}}
+/* saves and updates of the quick note go through here, 3 s after the last change */
+{let tm=null;const _add=qnAdd;qnAdd=function(text,html,src){const r=_add(text,html,src);try{if(src!=="quick"||!TG.auto||!tgReady())return r;
+  let id="";try{const a=qnLoad();const x=a.find(n=>n.text===text)||a[0];id=x&&x.id||""}catch(e){}if(!id)id="n_"+tgHash(text).slice(0,6);
+  clearTimeout(tm);tm=setTimeout(()=>tgSendNote(id,html,text),3000)}catch(e){}return r}}
+/* a new patient starts a new message */
+document.addEventListener("click",e=>{if(e.target.closest("#qnClear,#newPt"))TG.cur=null},true);
+/* p204 — safety netting whenever the patient is discharged (never when no disposition was stated); complaints and past history always bold and colored, in the rule-based note and in Claude's */
+function qnRetFallback(o){try{const doms=[...qnDomains(o)];const r=[];doms.forEach(d=>{if(QN_RET[d]&&!r.includes(QN_RET[d]))r.push(QN_RET[d])});return r}catch(e){return []}}
+function qnEnsureRet(B,o,rawTxt){const raw=String(rawTxt||"").toLowerCase();if(qnDspFromRaw(raw)!=="dis"&&!B.L.some(z=>z[1]==="dis"&&/discharged/i.test(z[0]||"")))return B;
+ const hasRet=B.L.some(z=>z[0]&&(z[1]==="ret"||/^Advised to return immediately if/i.test(z[0])));if(hasRet)return B;
+ const parts=qnRetFallback(o||{sym:[]});const line="Advised to return immediately if: "+(parts.length?parts.join("; ")+"; ":"")+"symptoms get worse or new symptoms appear, or there is any other concern.";
+ let hi=B.L.findIndex(z=>z[1]==="h"&&z[0]==="DISPOSITION");if(hi<0){B.L.push(["",""],["DISPOSITION","h"]);hi=B.L.length-1}
+ let end=hi+1;while(end<B.L.length&&B.L[end][1]!=="h")end++;while(end>hi+1&&!B.L[end-1][0])end--;B.L.splice(end,0,[line,"ret"]);B.ret=B.ret||line;return B}
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{if(!(opt&&opt.dspNone))qnEnsureRet(B,o,$("qnIn").value)}catch(e){}return B}}
+/* Claude's note: complaint line and past history/medications are "pos" (red, bold); return advice added when discharged */
+if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){const B=_t(J);try{let sec="";B.L.forEach(z=>{const [t,k]=z;if(k==="h"){sec=t;return}if(!t)return;
+   if(sec==="HISTORY"&&/\b(?:presented|presents|came|brought|attended)\b.*\b(?:with|after|complaining of|for)\b/i.test(t)&&k!=="neg")z[1]="pos";
+   if(sec==="HISTORY"&&/^(?:Past medical history|Past surgical history|Known case of|Regular medications?|On regular medications?|Medications?|Current medications?)\s*:/i.test(t)&&!/^(?:No |Not )/i.test(t)&&!/:\s*(?:none|nil|no )/i.test(t))z[1]="pos"});
+  const opt=qnOpt();if(!opt.dspNone)qnEnsureRet(B,qnLast&&qnLast.o,$("qnIn").value)}catch(e){}return B}}
+/* no disposition stated: a pack's "Disposition depends on …" line is kept only when a specialist, referral or pending result was actually mentioned */
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{if(opt&&opt.dspNone){const raw=String($("qnIn").value||"").toLowerCase();if(!/contact|refer|pending|await|review|on call|consult|level|overdose|result|repeat/.test(raw)){B.L=B.L.filter(z=>!(z[0]&&/^Disposition depends on\b|^Disposition as per\b/i.test(z[0])));
+   /* an empty DISPOSITION heading left behind */const hi=B.L.findIndex(z=>z[1]==="h"&&z[0]==="DISPOSITION");if(hi>=0){let j=hi+1,body=0;while(j<B.L.length&&B.L[j][1]!=="h"){if(B.L[j][0])body++;j++}if(!body){B.L.splice(hi,j-hi);if(hi>0&&!B.L[hi-1][0])B.L.splice(hi-1,1)}}}}}catch(e){}return B}}
+/* the disposition is read from the CLEANED dictation ("this charge" → discharged), not the raw microphone text */
+{const _f=qnDspFromRaw;qnDspFromRaw=function(raw){let t=String(raw||"");try{const d=QN_DROPPED.slice();t=qnDictClean(t);QN_DROPPED=d}catch(e){}return _f(t)}}
+/* p205 — narrative dictation understood without Claude: spoken units, vitals, results and phrases are normalized before parsing */
+const QN_NARR=[
+ [/\b(\d+(?:\.\d+)?)\s*milligrams?\b/gi,"$1 mg"],[/\b(\d+(?:\.\d+)?)\s*micrograms?\b/gi,"$1 mcg"],[/\b(\d+(?:\.\d+)?)\s*millilit(?:er|re)s?\b/gi,"$1 ml"],[/\b(\d+(?:\.\d+)?)\s*centimet(?:er|re)s?\b/gi,"$1 cm"],[/\b(\d+(?:\.\d+)?)\s*millimet(?:er|re)s?\b/gi,"$1 mm"],[/\b(\d+(?:\.\d+)?)\s*kilograms?\b/gi,"$1 kg"],[/\b(\d+(?:\.\d+)?)\s*grams?\b/gi,"$1 g"],[/\b(\d+(?:\.\d+)?)\s*(?:per ?cent|percent)\b/gi,"$1%"],
+ [/\b(?:oxygen )?saturations?\s*(?:is |of |was |at )?(\d{2,3})\s*%?/gi,"spo2 $1%"],[/\bheart rate\s*(?:is |of |was )?(\d{2,3})\b/gi,"hr $1"],[/\brespiratory rate\s*(?:is |of |was )?(\d{1,3})\b/gi,"rr $1"],[/\bblood pressure\s*(?:is |of |was )?(\d{2,3})\s*(?:over|\/)\s*(\d{2,3})\b/gi,"bp $1/$2"],[/\b(\d{2,3})\s+over\s+(\d{2,3})\b/g,"$1/$2"],[/\btemperature\s*(?:is |of |was )?(\d{2}(?:\.\d)?)\b/gi,"temp $1"],
+ [/\b(?:high )?blood (?:sugar|glucose)\s*(?:is |of |was )?(\d+(?:\.\d+)?)\b/gi,"glucose $1"],[/\bketones? (?:positive|\+)\b/gi,"ketones 3"],[/\bhemoglobin\s*(?:is |of |was )?(\d+(?:\.\d+)?)\b/gi,"hb $1"],[/\bwhite (?:cells?|blood cells?|cell count)\s*(?:is |of |was )?(\d+(?:\.\d+)?)\b/gi,"wbc $1"],[/\bbeta[- ]?hcg\s*(?:is |of |was )?(\d+)\b/gi,"bhcg $1"],[/\bcreatinine\s*(?:is |of |was )?(\d+)\b/gi,"creatinine $1"],[/\bbladder scan\s*(?:showed |shows |of )?(\d+)\s*ml\b/gi,"bladder scan $1 ml"],
+ [/\b(x-?ray|ultrasound|us|ct|mri|ecg|fluorescein|examination|per rectal examination|pr)\s+showed\b/gi,"$1 shows"],[/\bper rectal examination shows\b/gi,"PR:"],[/\bper rectal examination\b/gi,"PR:"],
+ [/\bknown (?:case of |to be )?(?:a )?diabetic\b/gi,"k/c dm"],[/\bknown (?:case of |to be )?hypertensive\b/gi,"k/c htn"],[/\bknown asthmatic\b/gi,"k/c asthma"],[/\bknown epileptic\b/gi,"k/c epilepsy"],[/\bknown (?:case of )?prostate enlargement\b/gi,"k/c bph"],[/\b(?:he|she|the patient|patient) (?:has|had|gives|with) (?:a )?(?:past )?history of ([a-z][a-z ]{2,40}?)(?=[,.;]|$| and | she | he )/gi,(m,x)=>"k/c "+x.trim()],[/\bk\/c dm and k\/c htn\b/gi,"k/c dm htn"],[/\bk\/c dm and hypertensive\b/gi,"k/c dm htn"],
+ [/\bfever (?:for|since) (\d+ (?:days?|hours?|weeks?)) up to (\d{2}(?:\.\d)?)\b/gi,"fever $2 for $1"],
+ [/\b(headache|pain)\b([^,.;]{0,30}?)\b(left|right) side\b/gi,"$3-sided $1$2"],[/,?\s*\bneurological examination (?:is )?normal\b/gi,". neuro exam normal"],[/\bthe eye (?:is )?red\b/gi,"red eye"],
+ [/\bcontact lens (?:user|wearer)\b/gi,"wears contact lenses"],[/\bfluorescein shows corneal ulcer\b/gi,"fluorescein uptake: corneal ulcer"],
+ [/\blaceration\b([^,.;]{0,60}?),\s*(\d+(?:\.\d+)?) cm\b/gi,"$2 cm laceration$1"],
+ [/\bPR: (hemorrhoids?|normal|no masses?[^,.;]*)/gi,"on PR examination $1"],
+ [/\b(?:he|she|the patient|patient) (?:was |were )?given\b/gi,"given"],
+ [/\b(\d+) stitches\b/gi,"$1 sutures"],[/\btetanus given\b/gi,"tetanus booster given"],
+ [/\bcontact lens user\b/gi,"contact lens wearer"],[/\bfollow up tomorrow\b/gi,"review tomorrow"],[/\bdischarged with (?:a )?catheter and urology clinic\b/gi,"discharged with the catheter in situ, urology clinic follow-up"],[/\bdischarged with safety netting\b/gi,"discharged with advice"],
+ [/\bconverted to sinus rhythm\b/gi,"reverted to sinus rhythm"],[/\b(hr \d{2,3}) regular narrow complex\b/gi,"$1, ECG regular narrow complex tachycardia"],
+ [/\bcame (?:in |to the (?:ed|er) )?with\b/gi,"c/o"],[/\bcame after\b/gi,"after"],[/\bpresented with\b/gi,"c/o"],[/\bcomplaining of\b/gi,"c/o"],
+ [/\b(?:he|she) denies\b/gi,"denies"],[/\b(?:he|she|the patient) vomited (once|twice|\d+ times)\b/gi,"vomited $1"],[/\bobserved for (\d+) hours\b/gi,"observed $1 hours"],
+ [/\bdiagnosed as\b/gi,"impression:"],[/\bstarted on (?=(?:iv|intravenous|insulin|antibiotic|treatment|oxygen|nebuli|infusion|heparin|anticoag|steroid|fluids))/gi,"started "],[/\bprescribed ([a-z][a-z ]+?)(?=,|\.|$| for | and )/gi,"$1 prescribed"],
+ [/\bsince (?:this )?morning\b/gi,"since this morning"],[/\bsince (\d+) (hours?|days?|weeks?)\b/gi,"for $1 $2"]];
+{const _c=qnDictClean;qnDictClean=function(raw){let t=String(raw||"");try{QN_NARR.forEach(([re,to])=>{t=t.replace(re,to)})}catch(e){}return _c(t)}}
+/* impressions the writer missed */
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{const r=String(o.rawUser||o.raw||"").toLowerCase();const ii=B.L.findIndex(z=>/^Impression:/.test(z[0]||""));const set=t=>{if(ii>=0)B.L[ii][0]="Impression: "+t+".";B.imp=t};
+  if(/\bknee\b/.test(r)&&/twist|sprain|injur/.test(r)&&/no fracture|x-?ray (?:normal|no)/.test(r)&&ii>=0&&/^Impression: Knee pain/.test(B.L[ii][0]))set("Soft tissue injury (sprain) of the "+(/\bleft knee|left\b/.test(r)?"left":"right")+" knee, no fracture on X-ray");
+  if(/corneal ulcer/.test(r)&&ii<0){const side=/\bleft eye|left\b/.test(r)?"left":"right";const t="Corneal ulcer of the "+side+" eye"+(/contact lens/.test(r)?" in a contact lens wearer":"");const ai=B.L.findIndex(z=>z[1]==="h"&&/^(?:INVESTIGATIONS|MANAGEMENT|DISCUSSION AND REFERRAL|DISPOSITION)$/.test(z[0]));B.L.splice(ai>=0?ai:B.L.length,0,["",""],["ASSESSMENT","h"],["Impression: "+t+".","pos"]);B.imp=t}
+  if(/confus/.test(r)&&/fever|temp 3[89]/.test(r)&&/urine (?:dip\w* )?(?:positive|nitrite|leuko)/.test(r)&&ii>=0&&/viral illness/.test(B.L[ii][0]))set("Urinary tract infection with sepsis (confusion and fever"+(/\bbp (?:[5-9]\d|10\d)\//.test(r)?", hypotension":"")+(/\bhr 1[1-9]\d\b/.test(r)?", tachycardia":"")+")");
+ }catch(e){}return B}}
+/* p206 — second narrative pass: examination findings and plans spoken inside the complaint sentence are moved out; "return if …" becomes return advice; missed impressions (TB, thyrotoxicosis, angioedema, clavicle, non-specific abdominal pain) */
+let QN_RETX=[];
+const QN_NARR2=[
+ [/,?\s*\b(?:and )?(?:urine|urinalysis) normal\b/gi,". urine dipstick normal"],[/,?\s*\b(?:and )?bladder palpable\b/gi,". bladder palpable"],[/,?\s*\b(?:and )?bleeding controlled\b(?! with)/gi,". bleeding controlled with pressure"],[/,\s*\bbleeding controlled with pressure\b/gi,". bleeding controlled with pressure"],[/,?\s*\b(?:and )?left normal\b/gi,". left ear normal"],[/,?\s*\b(?:and )?thyroid function (?:tests? )?sent\b/gi,". tft sent"],
+ [/\bear pain right side\b/gi,"right ear pain"],[/\bear pain left side\b/gi,"left ear pain"],
+ [/\banalgesia and physiotherapy\b/gi,"analgesia. physiotherapy referral"],[/\bnot healing\b/gi,"non-healing"],[/\bwith non-healing\b/gi,"non-healing"],
+ [/\bx-?ray (left|right) clavicle fracture midshaft\b/gi,"x-ray: midshaft fracture of the $1 clavicle"],[/\bx-?ray (left|right) (\w+) fracture\b/gi,"x-ray: fracture of the $1 $2"],
+ [/\bfacial swelling of the lips\b/gi,"lip swelling"],[/\bswelling of the lips\b/gi,"lip swelling"],
+ [/\bwith yellow sputum\b/gi,"with purulent sputum"],[/\bsaturation improved to (\d+) on (\d+) lit(?:er|re)s\b/gi,"spo2 $1% on $2 L oxygen"]];
+{const _c=qnDictClean;qnDictClean=function(raw){let t=String(raw||"");QN_RETX=[];try{QN_NARR2.forEach(([re,to])=>{t=t.replace(re,to)});
+  t=t.replace(/,?\s*\b(?:advised to )?(?:return|come back) (?:to the ed )?if ([^.;]+?)(?=[.;]|$)/gi,(m,x)=>{QN_RETX.push(x.trim());return ""})}catch(e){}return _c(t)}}
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{
+  if(QN_RETX.length){const ri=B.L.findIndex(z=>z[1]==="ret"&&/^Advised to return immediately if:/.test(z[0]||""));const extra=QN_RETX.join(", ");if(ri>=0){if(!B.L[ri][0].toLowerCase().includes(extra.toLowerCase()))B.L[ri][0]=B.L[ri][0].replace(/^Advised to return immediately if: /,"Advised to return immediately if: "+extra+"; ")}else if(!(opt&&opt.dspNone)){let hi=B.L.findIndex(z=>z[1]==="h"&&z[0]==="DISPOSITION");if(hi>=0){let e=hi+1;while(e<B.L.length&&B.L[e][1]!=="h")e++;while(e>hi+1&&!B.L[e-1][0])e--;B.L.splice(e,0,["Advised to return immediately if: "+extra+"; symptoms get worse or new symptoms appear.","ret"])}}}
+  const r=String(o.rawUser||o.raw||"").toLowerCase();const ii=B.L.findIndex(z=>/^Impression:/.test(z[0]||""));const set=t=>{if(ii>=0){B.L[ii][0]="Impression: "+t+".";B.L[ii][1]="pos"}else{const ai=B.L.findIndex(z=>z[1]==="h"&&/^(?:INVESTIGATIONS|MANAGEMENT|DISCUSSION AND REFERRAL|DISPOSITION)$/.test(z[0]));B.L.splice(ai>=0?ai:B.L.length,0,["",""],["ASSESSMENT","h"],["Impression: "+t+".","pos"])}B.imp=t};
+  const imp=ii>=0?B.L[ii][0]:"";
+  if(/hemoptysis/.test(r)&&/cavit/.test(r)&&/weight loss|night sweats|afb/.test(r))set("Suspected pulmonary tuberculosis (cavitating "+(/upper lobe/.test(r)?(/right/.test(r)?"right upper lobe":"left upper lobe"):"lung")+" lesion with hemoptysis, weight loss and night sweats); airborne isolation");
+  else if(/tremor|goit(?:er|re)|palpitations/.test(r)&&/tft|thyroid/.test(r)&&/weight loss|tremor|goit/.test(r)&&(!imp||/palpitations|anxiety/i.test(imp)))set("Suspected thyrotoxicosis (palpitations, tremor, weight loss"+(/goit/.test(r)?", goiter":"")+"); thyroid function pending");
+  else if(/lip swelling|angioedema/.test(r)&&/rash|urticaria|itch/.test(r)&&/^Impression: (?:Swelling|Rash)/i.test(imp))set("Urticaria with angioedema of the lips after "+((r.match(/after (?:taking )?([a-z]+)/)||[])[1]||"a trigger")+(/no (?:breathing|difficulty breathing|stridor)/.test(r)?", without airway involvement":""));
+  else if(/clavicle/.test(r)&&/fracture/.test(r)&&/^Impression: Fracture/i.test(imp))set("Midshaft fracture of the "+(/left clavicle/.test(r)?"left":"right")+" clavicle");
+  else if(/abdominal pain/.test(r)&&/no diarrh/.test(r)&&/soft/.test(r)&&/^Impression: Acute gastroenteritis/i.test(imp))set("Non-specific abdominal pain (soft abdomen, no diarrhea); early appendicitis and mesenteric adenitis to be reconsidered if symptoms persist");
+  if(ii>=0)B.L[ii][0]=B.L[ii][0].replace(/^Impression: ([a-z])/,(m,a)=>"Impression: "+a.toUpperCase());
+  if(ii>=0&&/croup/i.test(B.L[ii][0]))B.L[ii][0]=B.L[ii][0].replace(/^Impression: (?:Cough; |Hoarseness; |Stridor; )+/i,"Impression: ");
+  if(ii>=0)B.L[ii][0]=B.L[ii][0].replace(/^Impression: Cellulitis; (Infected diabetic foot ulcer)/i,"Impression: $1 with surrounding cellulitis");
+ }catch(e){}return B}}
+/* retention described in words ("inability to pass urine", "unable to pass urine") gets the retention impression */
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{const r=String(o.rawUser||o.raw||"").toLowerCase();if(/inability to pass urine|unable to pass urine|cannot pass urine|not passing urine/.test(r)&&!B.L.some(z=>/^Impression:/.test(z[0]||""))){const vol=(r.match(/(\d{3,4})\s*ml\b/)||[])[1];const t="Acute urinary retention"+(vol?" (residual volume "+vol+" mL)":"")+(/\bbph\b|prostat/.test(r)?", likely secondary to benign prostatic hyperplasia":"");const ai=B.L.findIndex(z=>z[1]==="h"&&/^(?:INVESTIGATIONS|MANAGEMENT|DISCUSSION AND REFERRAL|DISPOSITION)$/.test(z[0]));B.L.splice(ai>=0?ai:B.L.length,0,["",""],["ASSESSMENT","h"],["Impression: "+t+".","pos"]);B.imp=t}}catch(e){}return B}}
+/* p207 — second delivery channel for the hospital PC: a Microsoft Teams workflow (webhook), Power Automate, Zapier or Make URL that receives the note the moment it is written (text, colored HTML and an Adaptive Card); the API key can also be set once by link (#aikey=…) */
+const WH={url:"",fmt:"teams",on:true};try{WH.url=localStorage.getItem("erWhUrl")||"";WH.fmt=localStorage.getItem("erWhFmt")||"teams";WH.on=localStorage.getItem("erWhOn")!=="0"}catch(e){}
+function whReady(){return WH.on&&/^https:\/\//.test(WH.url)}
+function whCard(text,html,title){const lines=String(html||"").split("\n").filter(Boolean).map(l=>{const h=/class="c3h"/.test(l),r=/class="c3r"/.test(l),v=/class="c3v"/.test(l);const t=l.replace(/<[^>]+>/g,"").replace(/&amp;/g,"&").replace(/&lt;/g,"<").replace(/&gt;/g,">");return {type:"TextBlock",text:t,wrap:true,weight:h||r?"Bolder":"Default",color:r?"Attention":v?"Warning":h?"Default":"Accent",size:h?"Medium":"Default",spacing:h?"Medium":"None"}});
+ return {type:"message",attachments:[{contentType:"application/vnd.microsoft.card.adaptive",content:{"$schema":"http://adaptivecards.io/schemas/adaptive-card.json",type:"AdaptiveCard",version:"1.4",body:[{type:"TextBlock",text:title||"ER note",weight:"Bolder",size:"Large"},...lines.slice(0,120)]}}]}}
+async function whSend(text,html,title){if(!whReady())return false;const body=WH.fmt==="teams"?whCard(text,html,title):{title:title||"ER note",text:String(text||""),html:tgNoteDoc(html,title),sentAt:new Date().toISOString()};
+ const el=$("whLast");const say=(m,ok)=>{if(el){el.textContent="Webhook: "+m;el.className=ok===true?"ok":ok===false?"bad":""}};say("sending…");
+ try{const r=await fetch(WH.url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)});if(r.ok||r.status===202){say("delivered ("+r.status+")",true);return true}say("the service answered "+r.status,false);return false}
+ catch(e){/* no CORS headers: send blind (the request still arrives) */try{await fetch(WH.url,{method:"POST",mode:"no-cors",headers:{"content-type":"text/plain"},body:JSON.stringify(body)});say("sent (no confirmation possible from this browser: check Teams)",true);return true}catch(e2){say("could not reach the webhook ("+(e2&&e2.message||"blocked")+")",false);return false}}}
+/* same moments as Telegram */
+{const _s=tgSendNote;tgSendNote=async function(id,html,text){try{if(whReady()){const rec=(WH.sent=WH.sent||{});const h=tgHash(tgFromHtml(html));if(rec[id]!==h){rec[id]=h;whSend(text,html,typeof qnTitle==="function"?qnTitle(text):"ER note")}}}catch(e){}return _s(id,html,text)}}
+/* when Telegram is not set up, the webhook alone still gets the note */
+{let tm=null;const _add=qnAdd;qnAdd=function(text,html,src){const r=_add(text,html,src);try{if(src==="quick"&&whReady()&&!(tgReady()&&TG.auto)){clearTimeout(tm);tm=setTimeout(()=>{const h=tgHash(tgFromHtml(html));WH.sent=WH.sent||{};if(WH.sent["solo"]!==h){WH.sent["solo"]=h;whSend(text,html,qnTitle(text))}},3000)}}catch(e){}return r}}
+/* settings */
+{const box=$("tgSet");if(box){box.insertAdjacentHTML("afterend",`<details id="whSet" style="margin:6px 0"><summary class="mini">Send also to Microsoft Teams / Power Automate / Zapier (webhook)</summary>
+ <p class="mini">Paste a webhook URL. Microsoft Teams: open the channel or chat → ⋯ → <b>Workflows</b> → "Post to a channel when a webhook request is received" → copy the URL. The note is posted there (headings bold, findings red) the moment it is written, with the same updates as Telegram.</p>
+ <div class="grid wide"><label class="f">Webhook URL<input type="url" id="whUrl" placeholder="https://prod-…logic.azure.com/… or https://hooks.zapier.com/…" value="${esc(WH.url)}"></label><label class="f">Format<select id="whFmt"><option value="teams"${WH.fmt==="teams"?" selected":""}>Microsoft Teams card</option><option value="json"${WH.fmt==="json"?" selected":""}>Plain JSON (text + colored HTML)</option></select></label></div>
+ <div class="btns"><button type="button" class="b sm" id="whSave">Save on this browser</button><button type="button" class="b sm ghost" id="whTest">Send a test</button><button type="button" class="b sm ghost" id="whDel">Remove</button></div><label class="mini" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="whOn"${WH.on?" checked":""}> Send every written note there automatically</label><div id="whLast" class="mini"></div></details>`);
+ $("whSave").onclick=()=>{WH.url=$("whUrl").value.trim();WH.fmt=$("whFmt").value;try{localStorage.setItem("erWhUrl",WH.url);localStorage.setItem("erWhFmt",WH.fmt)}catch(e){}notify(whReady()?"Webhook saved.":"Paste a valid https URL.")};
+ $("whDel").onclick=()=>{WH.url="";$("whUrl").value="";try{localStorage.removeItem("erWhUrl")}catch(e){}notify("Webhook removed.")};
+ $("whOn").onchange=()=>{WH.on=$("whOn").checked;try{localStorage.setItem("erWhOn",WH.on?"1":"0")}catch(e){}};
+ $("whTest").onclick=()=>{WH.url=$("whUrl").value.trim();WH.fmt=$("whFmt").value;whSend("ER Doctor Note: webhook test.","<span class=\"c3h\">TEST</span>\n<span class=\"c3b\">The webhook from the ER note page works.</span>","ER note test")}}}
+/* the API key (and Telegram chat) can be handed to a browser once by link: …/#aikey=sk-ant-… */
+{try{const h=location.hash||"";const m=h.match(/aikey=([^&]+)/);if(m){const k=decodeURIComponent(m[1]);if(/^sk-ant-/.test(k)){QAI.key=k;try{localStorage.setItem("qnAiKey",k)}catch(e){}if($("qaiKey"))$("qaiKey").value="••••••••"+k.slice(-4);try{qaiStatus()}catch(e){}notify("Claude API key saved on this browser.")}history.replaceState(null,"",location.pathname+location.search)}}catch(e){}}
+/* p208 — channels that need no Microsoft and no middleman: a Discord webhook (text + colored file) and an ntfy.sh topic (no account at all) — chosen in the same webhook box */
+function tgMd(html){/* Telegram-style HTML → Discord markdown */return tgFromHtml(html).replace(/<b><u>([^<]*)<\/u><\/b>/g,"__**$1**__").replace(/<b>([^<]*)<\/b>/g,"**$1**").replace(/<i>([^<]*)<\/i>/g,"*$1*").replace(/<[^>]+>/g,"")}
+{const _send=whSend;whSend=async function(text,html,title){if(WH.fmt!=="discord"&&WH.fmt!=="ntfy")return _send(text,html,title);if(!whReady())return false;
+ const el=$("whLast");const say=(m,ok)=>{if(el){el.textContent=(WH.fmt==="discord"?"Discord: ":"ntfy: ")+m;el.className=ok===true?"ok":ok===false?"bad":""}};say("sending…");const fname=(String(title||"ER note").replace(/[^\w\-]+/g,"_").slice(0,40)||"ER_note")+".html";
+ try{if(WH.fmt==="discord"){const md=tgMd(html);const chunks=[];let s=md;while(s.length>1900){let c=s.lastIndexOf("\n",1900);if(c<500)c=1900;chunks.push(s.slice(0,c));s=s.slice(c)}chunks.push(s);
+   for(let i=0;i<chunks.length;i++){const fd=new FormData();const last=i===chunks.length-1;fd.append("payload_json",JSON.stringify({content:chunks[i],username:"ER note"}));if(last&&/<span/.test(html||""))fd.append("files[0]",new Blob([tgNoteDoc(html,title)],{type:"text/html"}),fname);const r=await fetch(WH.url,{method:"POST",body:fd});if(!r.ok)throw new Error("Discord answered "+r.status)}
+   say("delivered (text + colored file)",true);return true}
+  /* ntfy: text message, then the colored file as an attachment */
+  /* plain requests only (no custom headers → no CORS preflight that a network could refuse) */
+  const base=WH.url.replace(/\/+$/,"");const q=(o)=>Object.entries(o).map(([k,v])=>k+"="+encodeURIComponent(v)).join("&");
+  const r=await fetch(base+"?"+q({title:String(title||"ER note").slice(0,80),markdown:"yes"}),{method:"POST",body:tgMd(html).replace(/__\*\*(.*?)\*\*__/g,"**$1**")});if(!r.ok)throw new Error("ntfy answered "+r.status);
+  if(/<span/.test(html||"")){try{await fetch(base+"?"+q({filename:fname,title:"Colored note (open and copy into Epic)"}),{method:"POST",body:new Blob([tgNoteDoc(html,title)],{type:"text/plain"})})}catch(e){}}
+  say("delivered",true);return true}catch(e){say("failed: "+(e&&e.message||"blocked"),false);return false}}}
+{const sel=$("whFmt");if(sel){sel.insertAdjacentHTML("beforeend",`<option value="discord"${WH.fmt==="discord"?" selected":""}>Discord webhook (no Microsoft)</option><option value="ntfy"${WH.fmt==="ntfy"?" selected":""}>ntfy.sh topic (no account at all)</option>`);sel.value=WH.fmt;
+ const p=$("whSet")&&$("whSet").querySelector("p.mini");if(p)p.insertAdjacentHTML("afterend",`<p class="mini"><b>Discord:</b> free account, works in any browser; in your server → channel settings → Integrations → Webhooks → New webhook → Copy URL. The note arrives as a message plus the colored HTML file. <b>ntfy.sh:</b> no account; type a long private topic name (e.g. https://ntfy.sh/er-notes-ahmed-7f3k9q2) here and open the same address on the PC; the note and the colored file appear there instantly.</p>`)}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
