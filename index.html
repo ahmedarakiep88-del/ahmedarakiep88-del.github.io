@@ -11907,7 +11907,7 @@ async function qaiRun(force){if(!QAI.on&&!force)return;if(!qaiProv()){qaiStatus(
 function qaiShow(){if(!QAI.B||!qnLast)return;qnLast.B=QAI.B;$("qnOut").style.opacity="";$("qnOut").innerHTML=qnHTML(QAI.B,false);if(!qnImpMan&&QAI.B.imp)$("qnImp").value=QAI.B.imp;
  const miss=QAI.B.missing.filter(Boolean);$("qnFlags").querySelectorAll("[data-ai]").forEach(e=>e.remove());if(miss.length)$("qnFlags").insertAdjacentHTML("beforeend",`<div class="alert amber" data-ai="1"><b>Still to document:</b> ${esc(miss.join("; "))}.</div>`)}
 {const _r=qnRun;qnRun=function(){_r();if(!QAI.on||!qaiProv())return;const raw=$("qnIn").value.trim();if(!raw){QAI.B=null;return}const sig=JSON.stringify([raw,qnOpt()]);
-  if(sig===QAI.sig&&QAI.B){qaiShow();return}QAI.B=null;$("qnOut").style.opacity=".55";qaiStatus("Pause typing and Claude will write the note…","wait");qaiSchedule(1800)}}
+  if(sig===QAI.sig&&QAI.B){qaiShow();return}if(QAI.B&&QAI.rawDone&&typeof qnNz==="function"&&qnNz(raw)===qnNz(QAI.rawDone)){QAI.sig=sig;qaiShow();return}QAI.B=null;$("qnOut").style.opacity=".55";qaiStatus("Pause typing and Claude will write the note…","wait");qaiSchedule(1800)}}
 /* ===== p124: cast or plaster problem — history of the cast (where, type, side, when, with editable units), the issue and when it started, every red flag written one by one as negative when not selected, normal neurovascular examination when not entered, management per issue ===== */
 const TU=["","hours","days","weeks","months"];
 const caDurTxt=(n,u)=>n===""||n===null||n===undefined?"":`${n} ${u?(+n===1?u.replace(/s$/,""):u):"days"}`;
@@ -18171,7 +18171,7 @@ function qaiJson(txt){const m=String(txt||"").match(/\{[\s\S]*\}/);if(!m)return 
    catch(e){lastErr=e;if(e&&(e.name==="AbortError"||e.code==="cancelled"||e.code==="not_granted"||e.code==="rate_limited"||/^http_4/.test(e.code||"")))throw e;if(e&&e.code==="truncated")prompt+="\n\nREMINDER: keep every line short so the whole JSON fits; answer with the JSON object only."}
    if(stale())return}
   if(!J)throw lastErr||{code:"parse",message:"no note"};
-  if(stale())return;const B=qaiToB(J);if($("qnIn").value.trim()!==raw){qaiSchedule(400);return}QAI.B=B;qaiShow();qaiStatus("✓ Note written by Claude from your shorthand. Review it before pasting into Epic.","ok")}
+  if(stale())return;const B=qaiToB(J);{const nz=t=>typeof qnNz==="function"?qnNz(t):String(t).toLowerCase().replace(/[^a-z0-9]+/g," ").trim();if(nz($("qnIn").value)!==nz(raw)){if(typeof TG!=="undefined"&&TG.hold)setTimeout(()=>{try{qaiRun(true)}catch(e){}},300);else qaiSchedule(400);return}}QAI.B=B;QAI.rawDone=$("qnIn").value.trim();QAI.sig=JSON.stringify([QAI.rawDone,qnOpt()]);qaiShow();qaiStatus("✓ Note written by Claude from your shorthand. Review it before pasting into Epic.","ok")}
  catch(e){if(stale()||(e&&(e.name==="AbortError"||e.code==="cancelled")))return;QAI.B=null;$("qnOut").style.opacity="";const c=e&&e.code||"";const why=e&&e.message?String(e.message).slice(0,160):"";
   qaiStatus(c==="not_granted"?"Permission for Claude was declined: the rule-based draft is shown.":c==="rate_limited"?"Claude is busy (rate limit): try Rewrite now in a minute. The rule-based draft is shown.":/^http_401/.test(c)?"The API key was rejected (401). Check it in AI settings.":/^http_4(?:02|29)/.test(c)?"The API account has no credit or hit its limit ("+esc(why)+").":/^http_/.test(c)?`The AI service returned an error (${esc(c)}: ${esc(why)}). The rule-based draft is shown.`:c==="truncated"?"Claude's answer was cut short twice: the rule-based draft is shown. Press Rewrite now.":c==="parse"?"Claude answered in the wrong format twice: the rule-based draft is shown. Press Rewrite now.":/fetch|network/i.test(why)?"Could not reach the AI service (network or hospital firewall). The rule-based draft is shown.":"Claude could not write this note ("+esc(why||c||"unknown reason")+"): the rule-based draft is shown.","err")}
  finally{if(!stale())QAI.busy=false}}}
@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v200";
+const ER_VERSION="v201";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -19009,9 +19009,14 @@ function aiState(){try{if(typeof QAI==="undefined"||!QAI.on||!qaiProv())return "
  if(st==="done"&&QAI.B){const ah=qnHTML(QAI.B,false),at=qnText(QAI.B);if(ah!==html){html=ah;text=at}}
  TG.hold=null;clearTimeout(TG.holdCap);return _s(id,html,text)}}
 /* Claude finished → send the held note (as the final version) */
-{const _show=qaiShow;qaiShow=function(){_show();try{if(TG.hold&&QAI.B&&!QAI.busy){const h=TG.hold;TG.hold=null;clearTimeout(TG.holdCap);tgSendNote(h.id,qnHTML(QAI.B,false),qnText(QAI.B))}}catch(e){}}}
+{const _show=qaiShow;qaiShow=function(){_show();try{if(TG.hold&&QAI.B){const B=QAI.B;setTimeout(()=>{try{if(!TG.hold||QAI.busy||QAI.B!==B)return;const h=TG.hold;TG.hold=null;clearTimeout(TG.holdCap);tgSendNote(h.id,qnHTML(B,false),qnText(B))}catch(e){}},50)}}catch(e){}}}
 /* Claude failed (no credit, network, bad answer) → send the held draft once */
 {const _st=qaiStatus;qaiStatus=function(msg,cls){_st(msg,cls);try{if(cls==="err"&&TG.hold){const h=TG.hold;setTimeout(()=>{if(!TG.hold||QAI.busy)return;TG.hold=null;clearTimeout(TG.holdCap);tgSendNote(h.id,h.html,h.text);notify("Claude could not write the note: the draft was sent.")},300)}}catch(e){}}}
+
+/* a cosmetic change of the box (capital letter, full stop, spacing) after Claude wrote the note is not a reason to pay for another rewrite */
+function qnNz(t){let x=String(t||"");try{if(typeof voiceSmart==="function")x=voiceSmart(x)}catch(e){}try{x=qnDictClean(x)}catch(e){}return x.toLowerCase().replace(/\bd\/c\b/g,"discharged").replace(/[^a-z0-9]+/g," ").trim()}
+{const _r=qaiRun;qaiRun=async function(force){try{if(!force&&QAI.B&&QAI.rawDone&&qnNz($("qnIn").value)===qnNz(QAI.rawDone)){QAI.sig=JSON.stringify([$("qnIn").value.trim(),qnOpt()]);return}}catch(e){}return _r(force)}}
+{const _a=aiState;aiState=function(){const s=_a();try{if(s==="due"&&QAI.B&&QAI.rawDone&&!QAI.busy&&qnNz($("qnIn").value)===qnNz(QAI.rawDone))return "done"}catch(e){}return s}}
 /* p218 — refusals written cleanly (object only, boilerplate once, past refusals are history), "cauda equina" and pain-score mis-hearings, Claude JSON made robust, Sonnet back as default (now cached, so cheap) */
 {try{const m=localStorage.getItem("qnAiModel");if(m==="claude-haiku-5-5"&&!localStorage.getItem("qnAiModelUser")){QAI.model="claude-sonnet-5-5";localStorage.setItem("qnAiModel",QAI.model);if($("qaiModel"))$("qaiModel").value=QAI.model;qaiUsageDraw()}if($("qaiModel"))$("qaiModel").addEventListener("change",()=>{try{localStorage.setItem("qnAiModelUser","1")}catch(e){}})}catch(e){}}
 const VP_MORE=[[/\b(?:good|coda|corda|cold|cauda|kauda|cord a|quarter|coder|cardio) ?(?:equina|aquina|equine|a queen a|akina|eqina) ?(?:science|signs?|sign)?\b/gi,"cauda equina signs"],[/\bcauda equina signs signs\b/gi,"cauda equina signs"],
