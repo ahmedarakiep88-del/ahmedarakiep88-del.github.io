@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v196";
+const ER_VERSION="v197";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -19012,5 +19012,27 @@ function aiState(){try{if(typeof QAI==="undefined"||!QAI.on||!qaiProv())return "
 {const _show=qaiShow;qaiShow=function(){_show();try{if(TG.hold&&QAI.B&&!QAI.busy){const h=TG.hold;TG.hold=null;clearTimeout(TG.holdCap);tgSendNote(h.id,qnHTML(QAI.B,false),qnText(QAI.B))}}catch(e){}}}
 /* Claude failed (no credit, network, bad answer) → send the held draft once */
 {const _st=qaiStatus;qaiStatus=function(msg,cls){_st(msg,cls);try{if(cls==="err"&&TG.hold){const h=TG.hold;setTimeout(()=>{if(!TG.hold||QAI.busy)return;TG.hold=null;clearTimeout(TG.holdCap);tgSendNote(h.id,h.html,h.text);notify("Claude could not write the note: the draft was sent.")},300)}}catch(e){}}}
+/* p218 — refusals written cleanly (object only, boilerplate once, past refusals are history), "cauda equina" and pain-score mis-hearings, Claude JSON made robust, Sonnet back as default (now cached, so cheap) */
+{try{const m=localStorage.getItem("qnAiModel");if(m==="claude-haiku-5-5"&&!localStorage.getItem("qnAiModelUser")){QAI.model="claude-sonnet-5-5";localStorage.setItem("qnAiModel",QAI.model);if($("qaiModel"))$("qaiModel").value=QAI.model;qaiUsageDraw()}if($("qaiModel"))$("qaiModel").addEventListener("change",()=>{try{localStorage.setItem("qnAiModelUser","1")}catch(e){}})}catch(e){}}
+const VP_MORE=[[/\b(?:good|coda|corda|cold|cauda|kauda|cord a|quarter|coder|cardio) ?(?:equina|aquina|equine|a queen a|akina|eqina) ?(?:science|signs?|sign)?\b/gi,"cauda equina signs"],[/\bcauda equina signs signs\b/gi,"cauda equina signs"],
+ [/\b(?:he|she) got (\d{1,2}) out of (?:10|ten)\b/gi,"pain $1/10"],[/\bpain (?:score )?(\d{1,2}) out of (?:10|ten)\b/gi,"pain $1/10"],[/\bpatient presents today (?:and|with) (?:a |an )?/gi,"c/o "],[/\bcauda equina signs the patient\b/gi,"cauda equina signs. The patient"],[/\b(?:until|till) now\b\.?/gi,""],
+ [/\bdoesn'?t have any little sensation\b/gi,"has no loss of sensation"],[/\bas a lowly\b/gi,""],[/\bcat left against medical advice\b/gi,"left against medical advice"],[/\bconjunction however\b/gi,"; however"]];
+VOICE_PRINT.push(...VP_MORE);VOICE_FIX.unshift(...VP_MORE);
+{const _c=qnDictClean;qnDictClean=function(raw){let t=String(raw||"");VP_MORE.forEach(([re,to])=>{t=t.replace(re,to)});return _c(t)}}
+/* refusals: keep the thing refused (a few words), not the whole sentence */
+function qnRefShort(s){let x=String(s||"").trim();if(/\b(?:ago|last (?:year|month|week)|previously|before)\b/i.test(x))return "";const m=x.match(/\b(?:refus\w*|declin\w*)\s+(.*)$/i);if(m)x=m[1];x=x.replace(/^(?:to |the |a |an |any )+/i,"").replace(/^(?:to )?(?:give|giving) (?:him|her|the patient) (?:the |a |an )?/i,"");
+ x=x.replace(/^(?:to |the |a |an |any )+/i,"").replace(/^(?:be |being |to be )?(?:given|take|taking|have|having|receive|receiving|undergo|undergoing|do|doing) (?:the |a |an |any )?/i,"");
+ x=x.split(/\s*(?:,|;|:| but\b| however\b| and (?:he|she|the patient|was|is)\b| after\b| before\b| because\b| as\b| which\b| by \d)/i)[0];const w=x.split(/\s+/).filter(Boolean);if(w.length>8)x=w.slice(0,8).join(" ");x=x.replace(/[.\s]+$/,"");
+ return x}
+{const _p=qnParse;qnParse=function(raw){const o=_p(raw);try{if(o&&Array.isArray(o.refusal)&&o.refusal.length){const seen=new Set();o.refusal=o.refusal.map(qnRefShort).filter(x=>x&&!seen.has(x.toLowerCase())&&seen.add(x.toLowerCase()))}}catch(e){}return o}}
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{let n=0;B.L.forEach(z=>{if(z[1]!=="refz"||!z[0])return;n++;if(n>1)z[0]=z[0].replace(/\. The risk of refusal has been explained[\s\S]*$/,".").replace(/; the risks and benefits were explained[\s\S]*$/,".").replace(/^The patient refused/,"The patient also refused")})}catch(e){}return B}}
+/* Claude's answer: code fences, text before/after the JSON, and "wrong format" retries */
+{const _j=qaiJson;qaiJson=function(txt){let s=String(txt||"").replace(/```(?:json)?/gi,"");const a=s.indexOf("{"),b=s.lastIndexOf("}");if(a>=0&&b>a)s=s.slice(a,b+1);let r=_j(s);if(r)return r;try{r=JSON.parse(s.replace(/[\u0000-\u001f]+/g," "))}catch(e){}return r||null}}
+{const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft)+"\nReturn ONLY the JSON object, starting with { and ending with }."}}
+
+/* a short exam line that is the start of a longer line in the same section is a duplicate */
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{let sec="";const keep=[];B.L.forEach((z,i)=>{if(z[1]==="h")sec=z[0];keep.push(true)});sec="";B.L.forEach((z,i)=>{if(z[1]==="h"){sec=z[0];return}if(!z[0])return;const a=z[0].replace(/\.$/,"").toLowerCase();if(a.length<8)return;let s2="";for(let j=0;j<B.L.length;j++){const y=B.L[j];if(y[1]==="h"){s2=y[0];continue}if(j===i||s2!==sec||!y[0])continue;const bb=y[0].toLowerCase();if(bb.length>a.length&&bb.startsWith(a)&&/^[;,.: ]/.test(bb.slice(a.length))){keep[i]=false;break}}});B.L=B.L.filter((z,i)=>keep[i])}catch(e){}return B}}
+/* "The pain started after <drug> …" is a mis-parse of a treatment sentence, not an onset */
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{B.L=B.L.filter(z=>!(z[0]&&/^(?:The pain|Symptoms?|It) started after /i.test(z[0])&&typeof QN_DRUG!=="undefined"&&QN_DRUG.test(z[0].replace(/^(?:The pain|Symptoms?|It) started after (?:the |a |an )?/i,""))))}catch(e){}return B}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
