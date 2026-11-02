@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v195";
+const ER_VERSION="v196";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -19000,5 +19000,17 @@ QAI.cache=QAI.cache||{};
   if(j.stop_reason==="max_tokens")QAI.truncated=true;const txt=(j.content||[]).map(x=>x.text||"").join("");return txt})();
  QAI.cache[key]={p,t:now};try{const r=await p;QAI.cache[key]={res:r,t:Date.now()};return r}catch(e){delete QAI.cache[key];throw e}}}
 {const _d=qaiUsageDraw;qaiUsageDraw=function(){_d();try{const el=$("qaiUse");if(el&&QAI.usage.cached)el.textContent+=` ${Math.round(QAI.usage.cached/1000)}k tokens served from cache.`}catch(e){}}}
+/* p217 — nothing leaves the page before Claude answers: Telegram / ntfy / webhook sends are held while the rewrite is running or still due, and go out once when Claude has finished (the final note) or failed (no credit, no network → the draft). Hard cap 90 s. */
+TG.hold=null;
+function aiState(){try{if(typeof QAI==="undefined"||!QAI.on||!qaiProv())return "off";const raw=$("qnIn").value.trim();if(!raw)return "off";const sig=JSON.stringify([raw,qnOpt()]);if(QAI.busy)return "busy";if(QAI.sig===sig)return QAI.B?"done":"failed";return "due"}catch(e){return "off"}}
+{const _s=tgSendNote;tgSendNote=async function(id,html,text){const st=aiState();
+ if(st==="busy"||st==="due"){TG.hold={id,html,text,t:TG.hold&&TG.hold.t||Date.now()};if(st==="due"){try{qaiRun(true)}catch(e){}}tgLast("waiting for Claude to finish before sending",null);
+  clearTimeout(TG.holdCap);TG.holdCap=setTimeout(()=>{if(TG.hold){const h=TG.hold;TG.hold=null;_s(h.id,h.html,h.text)}},90000);return}
+ if(st==="done"&&QAI.B){const ah=qnHTML(QAI.B,false),at=qnText(QAI.B);if(ah!==html){html=ah;text=at}}
+ TG.hold=null;clearTimeout(TG.holdCap);return _s(id,html,text)}}
+/* Claude finished → send the held note (as the final version) */
+{const _show=qaiShow;qaiShow=function(){_show();try{if(TG.hold&&QAI.B&&!QAI.busy){const h=TG.hold;TG.hold=null;clearTimeout(TG.holdCap);tgSendNote(h.id,qnHTML(QAI.B,false),qnText(QAI.B))}}catch(e){}}}
+/* Claude failed (no credit, network, bad answer) → send the held draft once */
+{const _st=qaiStatus;qaiStatus=function(msg,cls){_st(msg,cls);try{if(cls==="err"&&TG.hold){const h=TG.hold;setTimeout(()=>{if(!TG.hold||QAI.busy)return;TG.hold=null;clearTimeout(TG.holdCap);tgSendNote(h.id,h.html,h.text);notify("Claude could not write the note: the draft was sent.")},300)}}catch(e){}}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
