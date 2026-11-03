@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v202";
+const ER_VERSION="v203";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -19165,5 +19165,13 @@ TG.ev=[];function tgEv(m){try{TG.ev.push(new Date().toTimeString().slice(0,8)+" 
 {const _st=qaiStatus;qaiStatus=function(msg,cls){_st(msg,cls);try{if(cls==="ok")tgEv("note ready");if(cls==="err")tgEv("Claude error → draft")}catch(e){}}}
 {const _sv=qvSaveNow;qvSaveNow=function(){tgEv("save");return _sv.apply(this,arguments)}}
 {const _tl=tgLast;tgLast=function(m,ok){try{if(ok===true)tgEv("sent: "+m)}catch(e){}return _tl(m,ok)}}
+/* p223 — discharge is implied by follow-up, clinic, sick leave, home medicines or "sent home": the discharge line and the safety netting are then always written (rule-based and Claude notes) */
+QN_DSP_RAW[0][1]=/\b(?:d\/c|dc|discharg\w*|sent home|go home|went home|home with|home on|home analgesia|f\/u|follow[- ]?up|fm clinic|family medicine|clinic (?:follow|appointment|review)|sick leave|sick note|return (?:to the ed|if)|safety net\w*)\b/i;
+function qnEnsureDis(B){try{if(B.L.some(z=>z[1]==="dis"||/^The patient was discharged\b|^Discharged\b/i.test(z[0]||"")))return B;let hi=B.L.findIndex(z=>z[1]==="h"&&z[0]==="DISPOSITION");if(hi<0){B.L.push(["",""],["DISPOSITION","h"]);hi=B.L.length-1}B.L.splice(hi+1,0,["The patient was discharged home in a stable and safe condition.","dis"])}catch(e){}return B}
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{if(qnDspFromRaw($("qnIn").value)==="dis"&&!(opt&&opt.dspNone)){qnEnsureDis(B);qnEnsureRet(B,o,$("qnIn").value)}}catch(e){}return B}}
+if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){const B=_t(J);try{const raw=$("qnIn").value;if(qnDspFromRaw(raw)==="dis"){qnEnsureDis(B);qnEnsureRet(B,qnLast&&qnLast.o,raw)}}catch(e){}return B}}
+{const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n",'RULES\n0k. Any follow-up, clinic referral, sick leave or home medicines means the patient was discharged: then DISPOSITION must contain the line "The patient was discharged home in a stable and safe condition." (kind "dis") followed by the return advice line "Advised to return immediately if: …" (kind "ret") with the red flags of this complaint. Name every medicine given; never write "an injection was given" when the shorthand names the drug.\n')}}
+/* admitted or LAMA wins over an implied discharge (follow-up words alone) */
+{const _f=qnDspFromRaw;qnDspFromRaw=function(raw){const v=_f(raw);try{const r=String(raw||"").toLowerCase().replace(/\b(?:after|before|until|post|on|at|prior to) (?:the )?discharge\b|\bdischarge (?:summary|plan|planning|letter|medications?)\b/g," ");if(v==="dis"&&!/\b(?:d\/c|dc|discharg\w*|sent home|go home|went home|home with|home on)\b/.test(r)){if(/\badmit\w*/.test(r))return "adm";if(/\blama\b|\bleft against\b|\bdama\b/.test(r))return "lama"}}catch(e){}return v}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
