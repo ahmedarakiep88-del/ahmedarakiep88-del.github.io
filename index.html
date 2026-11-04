@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v207";
+const ER_VERSION="v208";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -19295,5 +19295,41 @@ const OB_PREG=/\b(?:pregnan\w*|\d+ weeks? (?:ga|gestation|pregnant|poa)|\bga \d+
  B.obAsk=!line||ob.g==null;}catch(e){}return B}}
 {const _r=qnRun;qnRun=function(){_r();try{const box=$("qnFlags");if(!box)return;box.querySelectorAll("[data-ob]").forEach(x=>x.remove());if(qnLast&&qnLast.B&&qnLast.B.obAsk)box.insertAdjacentHTML("beforeend",`<div class="alert info" data-ob="1">Pregnant patient: say the obstetric history — gravida, para, abortions/miscarriages (e.g. "G3 P2 A1"), previous cesarean, LMP or weeks, booked or not, Rh — and it is written as "Obstetric history: …".</div>`)}catch(e){}}}
 {const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n",'RULES\n0n. Pregnant patient: write a HISTORY line "Obstetric history: G<n> P<n> A<n>, <living children>, <previous cesarean>, booked/not booked, Rh status" from what the shorthand says (gravida = pregnancies including this one, para = births, A = abortions/miscarriages); if these are not stated, add "obstetric history (G/P/abortions, previous cesarean, LMP, booking, Rh)" to "missing".\n')}}
+/* p228 — Claude transcript cleanup: after the mic stops (and before "save" writes the note) the dictated text is corrected once by Haiku — mis-heard medical words, drug names, broken order — using the page's own vocabulary and your learned corrections; the corrected shorthand replaces the box, the changes are listed, then the usual draft → final note → send. Switch in Settings. */
+const QDC={on:(()=>{try{return localStorage.getItem("erQdcOn")!=="0"}catch(e){return true}})(),done:"",busy:null,cache:{}};
+function qdcVocab(){let v="";try{v=VT_EXTRA||""}catch(e){}const extra="cauda equina, Buscopan, Toradol, ketorolac, Perfalgan, Primperan, Rocephin, Augmentin, Zithromax, Voltaren, Cataflam, Profenid, Solu-Medrol, Flagyl, Tramal, Avil, Ventolin, Atrovent, Lasix, Panadol, Adol, Fevadol, Brufen, Nexium, Losec, pantoprazole, hyoscine, metoclopramide, ondansetron, dexamethasone, hydrocortisone, chlorphenamine, adrenaline, salbutamol, ipratropium, nebulizer, tetanus toxoid, lidocaine, sutures, back slab, buddy taping, RICE, Ottawa rules, vitally stable, afebrile, tachycardic, saturation, diplopia, photophobia, meningism, Kernig, Brudzinski, GCS, FAST scan, e-FAST, CT KUB, ultrasound, troponin, D-dimer, lipase, CRP, CBC, U&E, INR, dipstick, nitrite, leukocytes, ketones, RBS, hematuria, dysuria, loin pain, renal colic, appendicitis, cholecystitis, pancreatitis, diverticulitis, PID, ectopic, threatened miscarriage, UPT, beta hCG, gravida, para, LMP, trimester, pre-eclampsia, URTI, tonsillitis, pharyngitis, otitis media, bronchiolitis, croup, asthma exacerbation, COPD, pneumonia, PE, ACS, STEMI, NSTEMI, SVT, AF, VT, Weber, Schatzker, Jones fracture, Salter-Harris, Gartland, Gustilo, Garden, Colles, Smith, scaphoid, Monteggia, Galeazzi, Bennett, dislocation, reduction, ORIF, sick leave, discharged, admitted, LAMA, follow up, family medicine, safety netting, nephrotic, nephritic, proteinuria, C3, C4, hemoptysis, pleuritic, orthopnea, syncope, vertigo, Dix-Hallpike, Epley, cellulitis, abscess, incision and drainage, urticaria, angioedema, anaphylaxis, EpiPen, DKA, hypoglycemia, gliclazide, metformin, insulin, warfarin, apixaban, rivaroxaban, clopidogrel, aspirin";
+ let learned="";try{const L=vLearned();learned=Object.entries(L).filter(([k])=>!/^ctx:/.test(k)).slice(0,120).map(([k,v])=>`"${k}" → "${v}"`).join("; ")}catch(e){}return {vocab:(v+", "+extra).replace(/\s+/g," "),learned}}
+function qdcPrompt(raw){const {vocab,learned}=qdcVocab();return `You are correcting a speech-to-text transcript of an emergency doctor's dictated clinical shorthand (English, non-native speaker, phone microphone). Fix ONLY what the microphone mis-heard: medical words, drug names, numbers with units, broken words, obviously wrong words that sound like a medical term. Keep the doctor's shorthand style, order and length. Do not add, remove or interpret clinical facts, do not expand abbreviations, do not write a note, do not change words that already make sense. Keep "d/c", "c/o", "k/c" as they are. If a phrase cannot be understood, leave it unchanged.
+
+Vocabulary the doctor uses (prefer these spellings): ${vocab}
+${learned?`Corrections the doctor has taught before (phone heard → meant): ${learned}\n`:""}
+TRANSCRIPT:
+"""${raw}"""
+
+Return ONLY the corrected transcript text, nothing else.`}
+async function qdcRun(reason){try{if(!QDC.on||typeof QAI==="undefined"||!QAI.key||QAI.sample)return false;const raw=$("qnIn").value.trim();if(!raw||raw.split(/\s+/).length<6)return false;const nz=typeof qnNz==="function"?qnNz(raw):raw.toLowerCase();if(QDC.done===nz)return false;if(QDC.cache[nz]!==undefined){QDC.done=nz;return false}
+ if(QDC.busy)return QDC.busy;QDC.busy=(async()=>{try{tgEv&&tgEv("transcript cleanup ("+(reason||"")+")");if($("qaiStat"))$("qaiStat").innerHTML='<span class="sumThink"><i></i><i></i><i></i></span> Checking the dictation…';
+  const m=QAI.model;QAI.model="claude-haiku-5-5";let out="";try{out=await qaiCall(qdcPrompt(raw),null)}finally{QAI.model=m}
+  out=String(out||"").replace(/^```[a-z]*\s*|\s*```$/g,"").replace(/^(?:corrected transcript:?\s*)/i,"").replace(/^"""|"""$/g,"").trim();QDC.cache[nz]=out;QDC.done=nz;
+  if(!out||out.length<raw.length*0.5||out.length>raw.length*1.6)return false;
+  const box=$("qnIn");if(box.value.trim()!==raw)return false;/* the doctor kept dictating: leave it */
+  const diff=qdcDiff(raw,out);if(out!==raw){box.value=out;QDC.done=typeof qnNz==="function"?qnNz(out):out.toLowerCase();QDC.cache[QDC.done]=out;try{QAI.sig="";qnRun()}catch(e){}}
+  QDC.lastDiff=diff;QDC.lastFor=QDC.done;qdcFlag();
+  try{if(diff.length&&typeof vLearnSafe==="function")diff.forEach(([a,b])=>{try{vLearnSafe(a,b)}catch(e){}})}catch(e){}
+  tgEv&&tgEv("cleanup done: "+diff.length+" change"+(diff.length===1?"":"s"));return out!==raw}catch(e){tgEv&&tgEv("cleanup failed: "+(e&&(e.code||e.message)||"?"));return false}finally{QDC.busy=null}})();return QDC.busy}catch(e){return false}}
+function qdcDiff(a,b){const A=a.split(/\s+/),B=b.split(/\s+/);const out=[];let i=0,j=0;const norm=w=>w.toLowerCase().replace(/[^a-z0-9/]/g,"");
+ while(i<A.length&&j<B.length){if(norm(A[i])===norm(B[j])){i++;j++;continue}let found=false;for(let k=1;k<=4&&!found;k++){for(let m=1;m<=4&&!found;m++){if(i+k<A.length&&j+m<B.length&&norm(A[i+k])===norm(B[j+m])){out.push([A.slice(i,i+k).join(" "),B.slice(j,j+m).join(" ")]);i+=k;j+=m;found=true}}}if(!found){out.push([A[i],B[j]]);i++;j++}}
+ return out.filter(([x,y])=>norm(x)!==norm(y)).slice(0,12)}
+/* after the mic stops: clean, then the usual flow */
+{const _stop=qvStop;qvStop=function(){_stop();try{if($("qnIn").value.trim())setTimeout(()=>{qdcRun("mic stopped")},700)}catch(e){}}}
+/* "save": clean first (if not done), then write and send */
+{const _save=qvSaveNow;qvSaveNow=function(){const self=this,args=arguments;try{const p=qdcRun("save");if(p&&typeof p.then==="function"){qvStatus&&qvStatus("<b>Checking the dictation…</b> then the final note is written and sent.");p.then(()=>_save.apply(self,args)).catch(()=>_save.apply(self,args));return}}catch(e){}return _save.apply(self,args)}}
+/* Claude's note waits for the cleanup when it is running */
+{const _run=qaiRun;qaiRun=async function(force){try{if(QDC.busy){await QDC.busy}else if(force&&QDC.on&&QN_DICTATED){const p=qdcRun("before the note");if(p&&p.then)await p}}catch(e){}return _run(force)}}
+/* setting */
+{const box=$("qaiSet");if(box&&!$("qdcOn")){box.insertAdjacentHTML("beforeend",`<label class="mini" style="display:flex;gap:6px;align-items:center;margin-top:6px"><input type="checkbox" id="qdcOn"${QDC.on?" checked":""}> Claude checks the dictation for mis-heard words before the note is written (one small Haiku call, about 0.1 cent)</label>`);$("qdcOn").onchange=()=>{QDC.on=$("qdcOn").checked;try{localStorage.setItem("erQdcOn",QDC.on?"1":"0")}catch(e){}}}}
+
+function qdcFlag(){try{const fl=$("qnFlags");if(!fl)return;fl.querySelectorAll("[data-qdc]").forEach(x=>x.remove());const diff=QDC.lastDiff||[];if(!diff.length)return;const nz=typeof qnNz==="function"?qnNz($("qnIn").value):"";if(QDC.lastFor&&nz&&nz!==QDC.lastFor)return;fl.insertAdjacentHTML("afterbegin",`<div class="alert info" data-qdc="1"><b>Dictation corrected by Claude:</b> ${diff.map(([a,b])=>`${esc(a)} → <b>${esc(b)}</b>`).join("; ")}. <span class="mini">(If a correction is wrong, edit the box; the corrected form is also added to your word memory.)</span></div>`)}catch(e){}}
+{const _r=qnRun;qnRun=function(){_r();qdcFlag()}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
