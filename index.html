@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v210";
+const ER_VERSION="v211";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -19359,5 +19359,17 @@ if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){return qnRetAl
 /* final wording, whatever path the sentence took */
 {const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{B.L.forEach(z=>{if(!z[0]||z[1]==="h")return;const m=z[0].match(/^(?:Injection ketorolac|Ketorolac(?: intramuscular)?(?: injection)?|Ketorolac)(?: (\d+(?:\.\d+)? ?mg))?(?: (?:IM|intramuscular(?:ly)?|im))?(?: injection)?(?: (?:was|were) given(?: by injection)?| intramuscular injection was given)(?: in the ED)?\.?$/i);if(m)z[0]=`Ketorolac${m[1]?" "+m[1]:""} intramuscular injection was given in the ED.`})}catch(e){}return B}}
 if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){const B=_t(J);try{B.L.forEach(z=>{if(z[0]&&/^(?:Injection ketorolac|Ketorolac)\b.*\b(?:IM|intramuscular|injection)\b.*\bgiven\b/i.test(z[0])&&!/intramuscular injection was given in the ED/.test(z[0])){const d=(z[0].match(/\b(\d+(?:\.\d+)? ?mg)\b/)||[])[1];z[0]=`Ketorolac${d?" "+d:""} intramuscular injection was given in the ED.`}})}catch(e){}return B}}
+/* p231 — the shorthand box in its own color (easy to tell from the note), and a "New note" (clear) button next to the red Voice note button */
+document.head.insertAdjacentHTML("beforeend",`<style>
+#qnIn{background:#fff8e1!important;border:2px solid #f4b400!important;color:#3e2723!important;border-radius:10px}
+#qnIn:focus{box-shadow:0 0 0 3px rgba(244,180,0,.35)}
+:root[data-theme="dark"] #qnIn{background:#3a2f0b!important;border-color:#f4b400!important;color:#fff3c4!important}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #qnIn{background:#3a2f0b!important;border-color:#f4b400!important;color:#fff3c4!important}}
+#qnNew{background:#fff;color:#b71c1c;border:2px solid #b71c1c;font-weight:700}#qnNew:active{background:#ffebee}
+:root[data-theme="dark"] #qnNew{background:#2a1215;color:#ff8a80;border-color:#ff8a80}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) #qnNew{background:#2a1215;color:#ff8a80;border-color:#ff8a80}}
+</style>`);
+{const mic=$("qnMic");if(mic&&!$("qnNew")){mic.insertAdjacentHTML("afterend",`<button type="button" class="b" id="qnNew" title="Clear the shorthand and start a new note">🗑 New note</button>`);
+ $("qnNew").onclick=()=>{try{if(QV&&QV.on)qvStop()}catch(e){}const had=$("qnIn").value.trim();try{$("qnClear").click()}catch(e){$("qnIn").value="";try{qnRun()}catch(e2){}}try{if(typeof QAI!=="undefined"){QAI.B=null;QAI.sig="";QAI.rawDone=""}}catch(e){}try{QDC.done="";QDC.lastDiff=[]}catch(e){}try{TG.hold=null}catch(e){}try{$("qnOut").innerHTML=""}catch(e){}notify(had?"Cleared: new note.":"Ready for a new note.");try{$("qnIn").focus()}catch(e){}}}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
