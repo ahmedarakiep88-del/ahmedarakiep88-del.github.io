@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v208";
+const ER_VERSION="v209";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -19331,5 +19331,11 @@ function qdcDiff(a,b){const A=a.split(/\s+/),B=b.split(/\s+/);const out=[];let i
 
 function qdcFlag(){try{const fl=$("qnFlags");if(!fl)return;fl.querySelectorAll("[data-qdc]").forEach(x=>x.remove());const diff=QDC.lastDiff||[];if(!diff.length)return;const nz=typeof qnNz==="function"?qnNz($("qnIn").value):"";if(QDC.lastFor&&nz&&nz!==QDC.lastFor)return;fl.insertAdjacentHTML("afterbegin",`<div class="alert info" data-qdc="1"><b>Dictation corrected by Claude:</b> ${diff.map(([a,b])=>`${esc(a)} → <b>${esc(b)}</b>`).join("; ")}. <span class="mini">(If a correction is wrong, edit the box; the corrected form is also added to your word memory.)</span></div>`)}catch(e){}}
 {const _r=qnRun;qnRun=function(){_r();qdcFlag()}}
+/* p229 — when Haiku answers in the wrong format twice, the note is retried once with Sonnet automatically; Claude's raw answer is kept and can be shown (AI settings → "Show Claude's last answer") so a format problem can be diagnosed */
+QAI.lastAnswer="";
+{const _c=qaiCall;qaiCall=async function(prompt,signal){const r=await _c(prompt,signal);try{if(!/speech-to-text transcript/.test(prompt)){QAI.lastAnswer=String(r||"");localStorage.setItem("qnAiLast",QAI.lastAnswer.slice(0,20000))}}catch(e){}return r}}
+{const _run=qaiRun;qaiRun=async function(force){const r=await _run(force);try{const st=$("qaiStat")&&$("qaiStat").textContent||"";if(!QAI.B&&/wrong format|cut short/.test(st)&&/haiku/.test(QAI.model||"")&&!QAI.sonnetRetry){QAI.sonnetRetry=true;const m=QAI.model;QAI.model="claude-sonnet-5-5";tgEv&&tgEv("Haiku format problem → retrying with Sonnet");try{await _run(true)}finally{QAI.model=m;QAI.sonnetRetry=false}}}catch(e){}return r}}
+{const box=$("qaiSet");if(box&&!$("qaiShowLast")){box.insertAdjacentHTML("beforeend",`<div style="margin-top:6px"><button type="button" class="b sm ghost" id="qaiShowLast">Show Claude's last answer</button><textarea id="qaiLastBox" hidden style="width:100%;height:160px;font:12px monospace;margin-top:4px"></textarea></div>`);
+ $("qaiShowLast").onclick=()=>{const t=$("qaiLastBox");let v=QAI.lastAnswer;try{v=v||localStorage.getItem("qnAiLast")||""}catch(e){}t.value=v||"(no answer stored yet)";t.hidden=!t.hidden}}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
