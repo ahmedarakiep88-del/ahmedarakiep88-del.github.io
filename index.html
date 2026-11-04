@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v211";
+const ER_VERSION="v212";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -19371,5 +19371,21 @@ document.head.insertAdjacentHTML("beforeend",`<style>
 </style>`);
 {const mic=$("qnMic");if(mic&&!$("qnNew")){mic.insertAdjacentHTML("afterend",`<button type="button" class="b" id="qnNew" title="Clear the shorthand and start a new note">🗑 New note</button>`);
  $("qnNew").onclick=()=>{try{if(QV&&QV.on)qvStop()}catch(e){}const had=$("qnIn").value.trim();try{$("qnClear").click()}catch(e){$("qnIn").value="";try{qnRun()}catch(e2){}}try{if(typeof QAI!=="undefined"){QAI.B=null;QAI.sig="";QAI.rawDone=""}}catch(e){}try{QDC.done="";QDC.lastDiff=[]}catch(e){}try{TG.hold=null}catch(e){}try{$("qnOut").innerHTML=""}catch(e){}notify(had?"Cleared: new note.":"Ready for a new note.");try{$("qnIn").focus()}catch(e){}}}}
+/* p232 — (1) the send gate also waits while the dictation cleanup or a just-requested rewrite has not started yet (the gap that let the draft out early); (2) "ibuprofen home" = home medicine prescribed; (3) the 15-minute injection watch line only when an injection, infusion, nebulizer, vaccine or block was given */
+QAI.pending=0;
+{const _r=qaiRun;qaiRun=async function(force){QAI.pending++;try{return await _r(force)}finally{QAI.pending=Math.max(0,QAI.pending-1)}}}
+{const _a=aiState;aiState=function(){const s=_a();try{if(s==="off")return s;if(QAI.pending>0||(typeof QDC!=="undefined"&&QDC.busy))return "busy"}catch(e){}return s}}
+/* the save ticker must not call it a failure while a run is pending */
+{const _save=qvSaveNow;qvSaveNow=function(){const r=_save.apply(this,arguments);return r}}
+{const _add=qnAdd;qnAdd=function(text,html,src){if(src==="quick"){try{if((QAI.pending>0||(typeof QDC!=="undefined"&&QDC.busy))&&!QAI.B){/* a draft save while Claude is about to run: keep it on the board, the send is held by the gate */}}catch(e){}}return _add(text,html,src)}}
+/* home medicines */
+{const _c=qnDictClean;qnDictClean=function(raw){let t=String(raw||"");
+ t=t.replace(/\b((?:[a-z][a-z-]{3,})(?: \d+(?:\.\d+)? ?(?:mg|g|ml|mcg))?) (?:for )?home(?: medication| medicine| treatment)?\b(?! (?:visit|care|nurs))/gi,(m,d)=>(typeof QN_DRUG!=="undefined"&&!QN_DRUG.test(d.toLowerCase())&&!/^(?:paracetamol|ibuprofen|cetirizine|loratadine|omeprazole|esomeprazole|pantoprazole|amoxicillin|augmentin|azithromycin|clarithromycin|doxycycline|ciprofloxacin|nitrofurantoin|metronidazole|prednisolone|salbutamol|budesonide|diclofenac|naproxen|tramadol|codeine|ondansetron|metoclopramide|domperidone|hyoscine|buscopan|antibiotics?|analgesia|analgesics?|antihistamines?|inhaler)$/i.test(d.split(" ")[0]))?m:`${d} prescribed for home`)
+  .replace(/\bhome (?:medication|medicine|treatment|analgesia)s?:? ((?:[a-z][a-z-]{3,})(?: \d+(?:\.\d+)? ?(?:mg|g|ml|mcg))?(?: and (?!(?:discharged|admitted|advised|then|follow|sick|he|she|the|was|is)\b)(?:[a-z][a-z-]{3,})(?: \d+(?:\.\d+)? ?(?:mg|g|ml|mcg))?)*)\b/gi,(m,d)=>/^(?:visit|care|nurs|with|after|and|then)/i.test(d)||(typeof QN_DRUG!=="undefined"&&!QN_DRUG.test(d.toLowerCase())&&!/^(?:paracetamol|ibuprofen|antibiotics?|analgesia|analgesics?)/i.test(d))?m:`${d} prescribed for home`)
+  .replace(/\b(\w+) prescribed for home (?:was |were )?(?:given|prescribed)\b/gi,"$1 prescribed for home");return _c(t)}}
+{const _b=qnBuild;qnBuild=function(o,opt){const B=_b(o,opt);try{B.L.forEach(z=>{if(z[0]&&z[1]!=="h")z[0]=z[0].replace(/^([A-Z][a-z-]+(?: \d+(?:\.\d+)? ?(?:mg|g|mL|ml|mcg))?) home was given\.$/,"$1 was prescribed for home.").replace(/^([A-Z][a-z-]+(?: [a-z-]+)*(?: \d+(?:\.\d+)? ?(?:mg|g|mL|ml|mcg))?) prescribed for home was given\.$/,"$1 was prescribed for home.")});
+ /* injection watch line only when something was actually injected, infused, nebulized or vaccinated */
+ let sec="";const mg=[];B.L.forEach(z=>{if(z[1]==="h"){sec=z[0];return}if(sec==="MANAGEMENT"&&z[0])mg.push(z[0])});const inj=mg.some(t=>/\b(?:injection|injected|IM\b|IV\b|intramuscular|intravenous|subcutaneous|SC\b|infusion|nebuli[sz]|vaccine|toxoid|booster|block was performed|immunoglobulin|adrenaline|epinephrine)\b/i.test(t)&&!/advised to stay in the ED/i.test(t));
+ if(!inj)B.L=B.L.filter(z=>!(z[0]&&/^The patient was advised to stay in the ED for 15 minutes after the injection/i.test(z[0])))}catch(e){}return B}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
