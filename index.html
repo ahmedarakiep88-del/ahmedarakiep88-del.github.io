@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v246";
+const ER_VERSION="v247";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -20550,5 +20550,17 @@ function ghStat(m){const el=$("ghSt");if(!el)return;el.textContent=m||(ghOn()?`O
  $("ghTest").onclick=async()=>{if(!ghOn())return ghStat("Paste the key first.");ghStat("testing…");try{await ghPut("notes/_test.json",{t:new Date().toISOString(),version:typeof ER_VERSION!=="undefined"?ER_VERSION:""});ghStat("Works — the test file was written to "+GHB.repo+".")}catch(e){ghStat("Failed: "+(e.message||e)+" — check the repository name and that the key has Contents: read and write on it.")}};
  $("ghAll").onclick=()=>{if(!ghOn())return ghStat("Paste the key first.");qnLoad().forEach(x=>{const p=ghPath(x);if(!GHB.q.some(e=>e.p===p))GHB.q.push({p,o:Object.assign(ghNoteObj(x),{shorthand:x.raw||"",note:x.text||""})})});ghQStore();ghStat(`${GHB.q.length} notes queued…`);ghFlush()};
  ghStat()}}
+/* p273 — Hands-free Shortcut: the Shortcut posts the transcript to a private ntfy inbox topic and opens ?inbox=1&send=1; the page fetches the newest dictation from the inbox (last 10 minutes, not used before), fills the shorthand, lets Claude write the note, then saves and sends to Telegram/ntfy as usual — no clipboard, no Paste tap, no length limit. If the inbox has nothing new, the paste screen (p244) is shown as before. */
+const INBOX_TOPIC="er-inbox-ahmed-k4v8x2";
+async function inboxFetch(){const r=await fetch(`https://ntfy.sh/${INBOX_TOPIC}/json?poll=1&since=10m`,{cache:"no-store"});const t=await r.text();const msgs=t.split("\n").filter(Boolean).map(l=>{try{return JSON.parse(l)}catch(e){return null}}).filter(m=>m&&m.event==="message"&&m.message);if(!msgs.length)return null;const m=msgs[msgs.length-1];let used="";try{used=localStorage.getItem("erInboxUsed")||""}catch(e){}if(m.id===used)return null;return m}
+async function inboxStart(){let q;try{q=new URLSearchParams(location.search||"")}catch(e){return}if(!q.get("inbox"))return;const send=q.get("send");try{history.replaceState(null,"",location.pathname)}catch(e){}try{qnShow("quick")}catch(e){}
+ const st=t=>{try{notify(t)}catch(e){}};st("Getting the dictation…");let m=null;for(let i=0;i<6&&!m;i++){try{m=await inboxFetch()}catch(e){}if(!m)await new Promise(r=>setTimeout(r,1200))}
+ if(!m){st("No new dictation in the inbox — paste it instead.");try{history.replaceState(null,"","?paste=1"+(send?"&send=1":""));erPasteStart()}catch(e){}return}
+ try{localStorage.setItem("erInboxUsed",m.id)}catch(e){}const text=String(m.message).trim();try{RL.src="Shortcut"}catch(e){}
+ try{qvStop()}catch(e){}const ta=$("qnIn");ta.value=text;try{VH.last=0}catch(e){}try{QAI.sig=""}catch(e){}try{qnRun()}catch(e){}
+ if(send==="1"||send==="true")setTimeout(()=>{try{qvSaveNow()}catch(e){try{qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick")}catch(e2){}}},800);
+ st("Dictation received — Claude is writing; it is saved and sent when ready.")}
+setTimeout(inboxStart,900);
+try{GD["iPhone Shortcut — hands-free"]=`<p>Shortcut actions: <b>Record audio</b> → <b>Get contents of</b> the Deepgram address (POST, File = Recorded Audio) → <b>Get Value</b> results.channels.1.alternatives.1.transcript → <b>Get contents of</b> <i>https://ntfy.sh/${INBOX_TOPIC}</i> (Method POST, Request Body File = Dictionary Value) → <b>Open URLs</b> <i>https://ahmedarakiep88-del.github.io/?inbox=1&amp;send=1</i>. The page picks the dictation up by itself, writes the note with Claude, saves it and sends it to Telegram and ntfy.</p>`}catch(e){}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
