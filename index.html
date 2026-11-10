@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v242";
+const ER_VERSION="v245";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -20420,7 +20420,7 @@ function ruleOrder(L){try{const rules=[];for(let i=L.length-1;i>=0;i--){if(RULE_
  let ai=L.findIndex(z=>z[1]==="h"&&z[0]==="ASSESSMENT");if(ai<0){const ii=L.findIndex(z=>z[1]==="h"&&/^(?:INVESTIGATIONS|MANAGEMENT)$/.test(z[0]));L.splice(ii<0?L.length:ii,0,["ASSESSMENT","h"],["",""]);ai=L.findIndex(z=>z[1]==="h"&&z[0]==="ASSESSMENT")}
  let at=ai+1;const imp=L.findIndex((z,i)=>i>ai&&/^(?:Final )?Impression:/.test(z[0]||""));if(imp>ai){at=imp+1}let e=at;while(e<L.length&&L[e][1]!=="h"){if(IMG_RX.test(L[e][0]||"")){break}e++}
  if(e<L.length&&L[e][1]!=="h"&&IMG_RX.test(L[e][0]||""))at=e;L.splice(at,0,...rules)}catch(e){}}
-function xrayTidy(L,raw){try{const r=String(raw||"").toLowerCase();L.forEach(z=>{if(z[0])z[0]=z[0].replace(/^An? X-?ray (?:of )?(?:the )?([a-z ]+?) (?:was )?requested\.$/i,(m,p)=>`An X-ray of the ${p.trim()} was requested.`).replace(/^(.+?\b(?:drops|creams|ointments|sprays|lotions|tablets|capsules|sachets))\s+was prescribed/i,"$1 were prescribed").replace(/^((?:[A-Za-z-]+ )?(?:eye |ear |nasal )?drops) was /i,"$1 were ")});
+function xrayTidy(L,raw){try{const r=String(raw||"").toLowerCase();{const a=L.findIndex(z=>/^An? X-?ray (?:was )?requested\.$/i.test(z[0]||""));const b2=L.findIndex(z=>/^An? X-?ray was done\.$/i.test(z[0]||""));if(a>=0){L[a][0]="An X-ray was requested; the result is pending.";if(b2>=0&&!/(?:x-?ray|xr)[^.]{0,30}(?:show|normal|no fracture|fracture|negative|unremarkable)/.test(r))L.splice(b2,1)}}L.forEach(z=>{if(z[0])z[0]=z[0].replace(/^An? X-?ray (?:of )?(?:the )?([a-z ]+?) (?:was )?requested\.$/i,(m,p)=>`An X-ray of the ${p.trim()} was requested.`).replace(/^(.+?\b(?:drops|creams|ointments|sprays|lotions|tablets|capsules|sachets))\s+was prescribed/i,"$1 were prescribed").replace(/^((?:[A-Za-z-]+ )?(?:eye |ear |nasal )?drops) was /i,"$1 were ")});
  for(let i=L.length-1;i>=0;i--){const m=(L[i][0]||"").match(/^An X-ray of the ([a-z ]+?) was requested\.$/i);if(!m)continue;const part=m[1].trim().toLowerCase();const resultSaid=new RegExp(`(?:x-?ray|xr)[^.]{0,30}(?:show|normal|no fracture|fracture|negative|unremarkable|clear)`,"i").test(r);const j=L.findIndex((z,k)=>k!==i&&new RegExp(`^An? X-?ray of the ${part} was done\\.$`,"i").test(z[0]||""));if(j>=0&&!resultSaid){L.splice(j,1);continue}if(L.some((z,k)=>k!==i&&new RegExp(`x-?ray of the ${part}[^.]*(?:showed|shows|normal|no fracture|fracture)`,"i").test(z[0]||"")))L.splice(i,1)}}catch(e){}}
 {const _a=auditApply;auditApply=function(B,raw){const R=_a(B,raw);try{if(R&&R.L){ruleOrder(R.L);xrayTidy(R.L,raw)}}catch(e){}return R}}
 {const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n","RULES\n0y. Imaging decision rules (Ottawa ankle/foot/knee, Canadian CT head, PECARN, NEXUS) are written in the ASSESSMENT directly after the Impression and before any sentence about the X-ray or CT they justify.\n")}}
@@ -20453,5 +20453,74 @@ if(typeof aiState==="function"){const _s=aiState;aiState=function(){try{if(ADDAI
 {const _al2=addLines;addLines=function(raw){const r=_al2(raw);try{const key=String(raw||"").trim();ADDAI.waiting=!!(key.length>8&&!ADDAI.cache[key])}catch(e){}return r}}
 {const _r=addAIRun;addAIRun=async function(raw){try{return await _r(raw)}finally{ADDAI.waiting=!!ADDAI.busy}}}
 if(typeof aiState==="function"){const _s2=aiState;aiState=function(){try{if(ADD&&ADD.mode==="addend"&&(ADDAI.waiting||ADDAI.busy))return "busy"}catch(e){}return _s2.apply(this,arguments)}}
+/* p269 — from the 10 Nov screenshot:
+ 1 age and sex always open the HISTORY: "A 44-year-old female presented …" (taken from the stray "44-year-old male." line or from the shorthand) — the first sentence is never left without them;
+ 2 "catheter like / catalac / kitorolac / ketorlac …" (mis-heard ketorolac) → ketorolac before anything reads the box, so the urinary-catheter rules are not triggered;
+ 3 "An injection was given in the ED (drug name not dictated)" is removed when a named injection is in the note;
+ 4 Oxford Handbook boxes readable in the dark theme. */
+const KET_MISHEAR=/\b(?:catheter[- ]?like|catalac|catalog|kitorolac|ketorlac|ketorolak|keterolac|ketrolac|ketorolic|kitorlac|cat[- ]?a[- ]?roll?ac|kept a role ac|ketoro lac)\b/gi;
+function ketMishear(s){return String(s||"").replace(/\b(\d+\s*(?:months?|weeks?|days?|years?)(?:[- ]old)?)\s+baby\s+(girl|boy)\b/gi,"$1 $2").replace(KET_MISHEAR,"ketorolac").replace(/\bketorolac\s+injection like\b/gi,"ketorolac injection")}
+{const _q=qnParse;qnParse=function(raw){return _q(ketMishear(raw))}}
+{const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(ketMishear(raw),opt,draft)}}
+function ageSexOpen(L,raw){try{const hi=L.findIndex(z=>z[1]==="h"&&z[0]==="HISTORY");if(hi<0)return;let i=hi+1;while(i<L.length&&!L[i][0]&&L[i][1]!=="h")i++;if(i>=L.length||L[i][1]==="h")return;const first=L[i][0];
+ if(/\b\d+[- ](?:year|month|week|day)s?[- ]old\b|\b(?:newborn|neonate)\b/i.test(first.slice(0,80)))return;
+ let o={};try{o=qnParse(raw)}catch(e){}const box=String(raw||"");let age=o.age,u=o.ageU||"year",sex=o.sex||"";
+ if(age==null||age===""){const m=box.match(/\b(\d{1,3})\s*(?:-|\s)?(?:years?|yrs?|yo|y\/o|y)\b(?:[- ]old)?/i)||box.match(/\b(\d{1,2})\s*(months?|weeks?|days?)\b(?:[- ]old)?/i);if(m){age=+m[1];u=m[2]?m[2].replace(/s$/,""):"year"}}
+ if(!sex)sex=/\b(?:female|woman|lady|girl|she|her|mother|pregnan|wife)\b/i.test(box)?"female":/\b(?:male|man|gentleman|boy|he|his|husband)\b/i.test(box)?"male":"";
+ if(age==null||age===""){if(!sex)return}
+ u=/^m/i.test(u)?"month":/^w/i.test(u)?"week":/^d/i.test(u)?"day":"year";const ageY=u==="year"?+age:u==="month"?age/12:0;const noun=!sex?"patient":ageY<1?(sex==="female"?"baby girl":"baby boy"):ageY<13?(sex==="female"?"girl":"boy"):sex;
+ const ag=age!=null&&age!==""?`${age}-${u}-old `:"";const lead=`${/^[aeiou]/i.test(ag||noun)&&!/^1[18]-|^8-|^11-/.test(ag)?"An":"A"} ${ag}${noun}`;
+ const t=first.replace(/^(?:The patient |Patient |He |She )?(presented|came|was brought|attended)/i,(m,v)=>`${lead} ${v.toLowerCase()}`);
+ L[i][0]=t!==first?t:`${lead} presented with ${first.charAt(0).toLowerCase()+first.slice(1)}`.replace(/presented with presented/,"presented")}catch(e){}}
+function fix269(B,raw){try{if(!B||!B.L||B.addendum)return B;const L=B.L;const r=ketMishear(raw);
+ /* drop the stray age line (p263 also does) and put age/sex in the first sentence */
+ const hi=L.findIndex(z=>z[1]==="h"&&z[0]==="HISTORY");if(hi>0)for(let i=hi-1;i>=0;i--){if(/^(?:An? )?\d+[- ](?:year|month|week|day)s?[- ]old (?:male|female|man|woman|boy|girl|baby|infant|child)\.?$/i.test((L[i][0]||"").trim()))L.splice(i,1)}
+ ageSexOpen(L,r);
+ /* unnamed injection when a named one exists */
+ const named=L.some(z=>/^(?!An injection)[A-Z][a-z]+[^.]*injection[^.]*was given|^[A-Z][a-z]+[^.]*(?:intramuscular|intravenous)[^.]*was given/.test(z[0]||""));
+ if(named)for(let i=L.length-1;i>=0;i--){if(/^An injection was given in the ED \(drug name not dictated\)\.?$/i.test(L[i][0]||""))L.splice(i,1)}
+ if(B.audit)B.audit=B.audit.filter(f=>!(named&&/name the drug/i.test(f.m)&&/injection/i.test(f.m)));
+ }catch(e){}return B}
+{const _a=auditApply;auditApply=function(B,raw){return fix269(_a(B,ketMishear(raw)),raw)}}
+document.head.insertAdjacentHTML("beforeend",`<style>.oxBox{background:transparent!important;color:inherit!important}.oxBox>summary{color:inherit}.oxC{color:#78909c!important}</style>`);
+/* p270 — limb injury examination is always complete: for an injury of a limb (knee, ankle, foot, wrist, hand, finger, elbow, shoulder, arm, leg, hip, toe, forearm, thigh) the EXAMINATION states bruising, swelling, deformity and the distal neurovascular status. Dictated findings are kept; only the items not mentioned are written as normal ("No bruising or deformity."; "Neurovascular examination distal to the injury is intact: …"). Claude is told the same. */
+const LIMB_RX=/\b(knees?|ankles?|feet|foot|wrists?|hands?|fingers?|thumbs?|elbows?|shoulders?|arms?|forearms?|legs?|hips?|toes?|thighs?|calf|calves|shin|heel|clavicle)\b/i;
+const INJ_RX=/\b(?:injur|fell|fall|slip|twist|sprain|trauma|hit|struck|kick|crush|rta|mva|mvc|accident|inversion|rolled|jammed|stubbed|landed|fracture|dislocat|bump)/i;
+function limbExam(L,raw){try{const r=String(raw||"");if(!INJ_RX.test(r)||!LIMB_RX.test(r))return;const ei=L.findIndex(z=>z[1]==="h"&&z[0]==="EXAMINATION");if(ei<0)return;let ee=ei+1;while(ee<L.length&&L[ee][1]!=="h")ee++;const ex=(L.slice(ei+1,ee).map(z=>z[0]||"").join(" ")+" "+L.map(z=>z[0]||"").filter(t=>!/^No /.test(t)).join(" ")+" "+r.replace(/\bno\s+[a-z ,]{0,40}?(?:bruis\w*|swell\w*|swollen|deformit\w*)/gi," ")).toLowerCase();
+ const has=rx=>rx.test(ex);const need=[];if(!has(/bruis|ecchymos|hematoma|haematoma/))need.push("bruising");if(!has(/swell|swollen|edema|oedema|effusion/))need.push("swelling");if(!has(/deform|shorten|external(?:ly)? rotat|internal(?:ly)? rotat|angulat|dislocat|displaced|step[- ]off|dinner[- ]fork|squaring|tenting|malalign/))need.push("deformity");
+ const nv=has(/neurovascular|distal pulses?|capillary refill|sensation|pulses palpable|neurovascularly/);
+ const add=[];if(need.length)add.push([`No ${need.length===1?need[0]:need.slice(0,-1).join(", ")+" or "+need[need.length-1]}.`,""]);if(!nv)add.push(["Neurovascular examination distal to the injury is intact: distal pulses palpable, capillary refill under 2 seconds, normal sensation and movement.",""]);if(!add.length)return;
+ /* after the last line that names the injured part, else at the end of EXAMINATION */
+ let at=-1;for(let i=ei+1;i<ee;i++){if(LIMB_RX.test(L[i][0]||""))at=i}let ins=at>=0?at+1:ee;if(at<0)while(ins>ei+1&&!L[ins-1][0])ins--;L.splice(ins,0,...add)}catch(e){}}
+{const _a=auditApply;auditApply=function(B,raw){const R=_a(B,raw);try{if(R&&R.L&&!R.addendum)limbExam(R.L,raw)}catch(e){}return R}}
+{const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n","RULES\n0z. For any limb injury the EXAMINATION always states bruising, swelling, deformity and the distal neurovascular status; keep what was dictated and write the items not mentioned as normal (\"No bruising or deformity.\"; \"Neurovascular examination distal to the injury is intact: distal pulses palpable, capillary refill under 2 seconds, normal sensation and movement.\").\n")}}
+/* p271 — from the 10 Nov 07:43 screenshot:
+ 1 Claude's text no longer turns every "/" into "or" — numbers keep their slash (Centor 0/4, pain 6/10, BP 100/60); only word/word becomes "word or word";
+ 2 the person who brought the child is written in the opening ("A 6-year-old boy, brought by his father, presented …") and every advice line is addressed to that person ("The father was advised…", "booked by the father");
+ 3 the score lines Claude writes for a sore throat are replaced by the page's calculated Centor + McIsaac + FeverPAIN line;
+ 4 "non-documented / undocumented (low-grade|high|mild) fever" → "(low-grade) fever at home, unmeasured" — kept red as a symptom. */
+if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){try{const P="∕";const fix=s=>String(s).replace(/(\d)\s*\/\s*(\d)/g,`$1${P}$2`).replace(/\b(d|w|m|y)\/(d|c|o)\b/gi,`$1${P}$2`);(J.sections||[]).forEach(s=>(s.lines||[]).forEach(l=>{if(l&&l.t)l.t=fix(l.t)}));if(J.opening)J.opening=fix(J.opening);const B=_t(J);(B.L||[]).forEach(z=>{if(z[0])z[0]=z[0].split(P).join("/")});return B}catch(e){return _t(J)}}}
+const FEV_UNDOC=/\b(?:non|not|un)[- ]?documented\s+((?:low[- ]grade|high[- ]grade|high|mild|intermittent|on and off)\s+)?fever\b/gi;
+{const _q=qnParse;qnParse=function(raw){return _q(String(raw||"").replace(FEV_UNDOC,(m,a)=>`${(a||"").replace(/low grade/i,"low-grade").replace(/on and off\s*/i,"intermittent ")}fever`).replace(/\bon and off\b/gi,"intermittently").replace(/\blow grade\b/gi,"low-grade"))}}
+function broughtBy(raw){const m=String(raw||"").match(/\b(?:brought|accompanied|came)\s+(?:in\s+)?(?:by|with)\s+(?:his|her|their|the)?\s*(father|mother|parents|grandmother|grandfather|grandparents|aunt|uncle|brother|sister|guardian|carer|caregiver|nanny|family|dad|mom|mum)\b/i);if(!m)return null;let w=m[1].toLowerCase();w={dad:"father",mom:"mother",mum:"mother",caregiver:"carer"}[w]||w;return w}
+function fix271(B,raw){try{if(!B||!B.L||B.addendum)return B;const L=B.L;const r=String(raw||"");let ageY=null;try{ageY=scAge(qnParse(r))}catch(e){}
+ /* 4 wording */if(FEV_UNDOC.test(r)){FEV_UNDOC.lastIndex=0;const i=L.findIndex(z=>z[1]!=="h"&&/\bfever\b/i.test(z[0]||""));if(i>=0&&!/unmeasured|not measured/i.test(L[i][0]))L[i][0]=L[i][0].replace(/\bfever\b/i,"fever at home (unmeasured)")}FEV_UNDOC.lastIndex=0;
+ L.forEach(z=>{if(z[0]&&ageY!==null&&ageY<13)z[0]=z[0].replace(/^(An? \d+-(?:year|month|week|day)-old )(male|female)\b/,(m,a,s)=>a+(s==="male"?(ageY<1?"baby boy":"boy"):(ageY<1?"baby girl":"girl")))});L.forEach(z=>{if(z[0])z[0]=z[0].replace(/\b(?:non|not|un)[- ]?documented\s+((?:low[- ]grade|high[- ]grade|high|mild|intermittent|on and off)\s+)?fever\b/gi,(m,a)=>`${a||""}fever at home (unmeasured)`).replace(/fever at home unmeasured/gi,"fever at home (unmeasured)").replace(/fever at home \(not measured\)/gi,"fever at home (unmeasured)")});
+ /* 2 brought by */const who=broughtBy(r);
+ if(who&&ageY!==null&&ageY<18){const pron=/\b(?:girl|female|daughter|she|her)\b/i.test(r)?"her":"his";const whoP=who==="parents"||who==="grandparents"||who==="family"?`${pron} ${who}`:`${pron} ${who}`;
+  const hi=L.findIndex(z=>z[1]==="h"&&z[0]==="HISTORY");let i=hi+1;while(i<L.length&&!L[i][0]&&L[i][1]!=="h")i++;
+  if(i<L.length&&L[i][1]!=="h"&&!/brought by|accompanied by/i.test(L[i][0])){L[i][0]=L[i][0].replace(/^(An? [^,]*?(?:old )?(?:boy|girl|baby boy|baby girl|male|female|child|infant|patient))\s+(presented|was brought)/i,(m,a,v)=>`${a}, brought by ${whoP}, presented`).replace(/, accompanied by (?:his|her) (\w+),/,`, brought by ${whoP},`).replace(/^(Presented)/,`Brought by ${whoP}, presented`)}
+  const W=who==="family"?"The family":`The ${who}`;const were=/s$|family/.test(who)?"were":"was";
+  if(who!=="parents")L.forEach(z=>{if(!z[0])return;z[0]=z[0].replace(/^The parents were (advised|told|informed|counsell?ed|reassured)/,`${W} ${were} $1`).replace(/\bbooked by the parents\b/g,`booked by the ${who}`).replace(/\bexplained to the parents\b/g,`explained to the ${who}`)})}
+ /* 3 Centor line from the page */
+ const ci=L.findIndex(z=>/^Centor score|^McIsaac|Centor score \d (?:or|\/)/i.test(z[0]||""));if(ci>=0&&!/^Centor score \d\/4(?: —|;)/.test(L[ci][0])&&!/as documented/i.test(L[ci][0])&&!/\bcentor(?: score)?\s*\d/i.test(r)){try{const cs=qnCentor(qnParse(r),{});if(cs){L[ci][0]=cs;for(let j=L.length-1;j>ci;j--){if(/^FeverPAIN score/i.test(L[j][0]||"")&&/FeverPAIN score/.test(cs))L.splice(j,1)}}}catch(e){}}
+ }catch(e){}return B}
+{const _a=auditApply;auditApply=function(B,raw){return fix271(_a(B,raw),raw)}}
+{const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n",'RULES\n0aa. When the child was brought by someone, write it in the first HISTORY sentence ("A 6-year-old boy, brought by his father, presented with …") and address all advice to that person. Mark every presenting symptom (including fever and cough) as part of the positive complaint.\n')}}
+
+/* final wording at render time (the advice addressing runs after the checks) */
+function whoFix(t){try{const r=($("qnIn")&&$("qnIn").value)||"";const who=broughtBy(r);if(!who||who==="parents")return t;return String(t).replace(/booked by the parents/g,`booked by the ${who}`).replace(/explained to the parents/g,`explained to the ${who}`).replace(/^The parents were (advised|told|informed)/gm,`The ${who} ${/s$|family/.test(who)?"were":"was"} $1`)}catch(e){return t}}
+{const _t=qnText;qnText=function(B){return whoFix(_t(B))}}
+{const _h=qnHTML;qnHTML=function(B,i){return whoFix(_h(B,i))}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
