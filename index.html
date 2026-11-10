@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v245";
+const ER_VERSION="v246";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -20522,5 +20522,33 @@ function fix271(B,raw){try{if(!B||!B.L||B.addendum)return B;const L=B.L;const r=
 function whoFix(t){try{const r=($("qnIn")&&$("qnIn").value)||"";const who=broughtBy(r);if(!who||who==="parents")return t;return String(t).replace(/booked by the parents/g,`booked by the ${who}`).replace(/explained to the parents/g,`explained to the ${who}`).replace(/^The parents were (advised|told|informed)/gm,`The ${who} ${/s$|family/.test(who)?"were":"was"} $1`)}catch(e){return t}}
 {const _t=qnText;qnText=function(B){return whoFix(_t(B))}}
 {const _h=qnHTML;qnHTML=function(B,i){return whoFix(_h(B,i))}}
+/* p272 — Notes backup for the 12-hour review: every saved note (and every addendum / update of it) is also written to a PRIVATE GitHub repository (default ahmedarakiep88-del/er-notes) as notes/YYYY-MM-DD/<id>.json — the shorthand, the final note text, the self-check result, the version and the source. The key (a fine-grained token limited to that one repository, contents read/write) is pasted once in the settings and kept only in this browser; it is never part of the page. Failed writes are kept and retried with the outbox. Nothing is written until a key is saved. */
+const GHB={repo:(()=>{try{return localStorage.getItem("erGhRepo")||"ahmedarakiep88-del/er-notes"}catch(e){return "ahmedarakiep88-del/er-notes"}})(),tok:(()=>{try{return localStorage.getItem("erGhTok")||""}catch(e){return ""}})(),q:(()=>{try{return JSON.parse(localStorage.getItem("erGhQ")||"[]")}catch(e){return []}})(),sha:{},busy:false};
+function ghOn(){return !!(GHB.tok&&/^[\w.-]+\/[\w.-]+$/.test(GHB.repo))}
+function ghQStore(){try{GHB.q=GHB.q.slice(-200);localStorage.setItem("erGhQ",JSON.stringify(GHB.q))}catch(e){}}
+function ghB64(s){return btoa(unescape(encodeURIComponent(s)))}
+async function ghPut(path,obj){const url=`https://api.github.com/repos/${GHB.repo}/contents/${path}`;const H={"Authorization":"Bearer "+GHB.tok,"Accept":"application/vnd.github+json","X-GitHub-Api-Version":"2022-11-28"};
+ let sha=GHB.sha[path];if(!sha){try{const g=await fetch(url,{headers:H});if(g.ok){sha=(await g.json()).sha}}catch(e){}}
+ const r=await fetch(url,{method:"PUT",headers:Object.assign({"Content-Type":"application/json"},H),body:JSON.stringify({message:`note ${path.split("/").pop()}`,content:ghB64(JSON.stringify(obj,null,1)),sha})});
+ if(!r.ok)throw new Error("GitHub "+r.status);const j=await r.json();GHB.sha[path]=j.content&&j.content.sha;return true}
+function ghNoteObj(x){let audit=[];try{const B=(typeof QAI!=="undefined"&&QAI.B)||(qnLast&&qnLast.B);audit=(B&&B.audit||[]).map(f=>(f.fix?"fixed: ":"warn: ")+f.m)}catch(e){}
+ return {id:x.id,t:x.t,title:x.title||"",src:x.src||"",version:typeof ER_VERSION!=="undefined"?ER_VERSION:"",shorthand:x.raw||(($("qnIn")&&$("qnIn").value)||""),note:x.text||"",addenda:x.add||x.addenda||undefined,audit,model:(typeof QAI!=="undefined"&&QAI.model)||"",ai:!!(typeof QAI!=="undefined"&&QAI.B)}}
+function ghPath(x){const d=new Date(x.t||Date.now());const loc=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);return `notes/${loc}/${x.id}.json`}
+function ghQueue(x){if(!ghOn()||!x||!x.id)return;const o=ghNoteObj(x);const p=ghPath(x);GHB.q=GHB.q.filter(e=>e.p!==p);GHB.q.push({p,o});ghQStore();setTimeout(ghFlush,500)}
+async function ghFlush(){if(!ghOn()||GHB.busy||!GHB.q.length)return;GHB.busy=true;try{for(const e of GHB.q.slice()){try{await ghPut(e.p,e.o);GHB.q=GHB.q.filter(z=>z!==e);ghQStore();try{tgEv&&tgEv("backup: saved "+e.p)}catch(_){}}catch(err){try{tgEv&&tgEv("backup failed: "+(err.message||err))}catch(_){}if(/401|403|404/.test(String(err.message))){ghStat("The key or repository was refused ("+err.message+"). Check the settings.");break}}}}finally{GHB.busy=false;ghStat()}}
+/* hook: every save / update of a note */
+{const _add=qnAdd;qnAdd=function(text,html,src){const r=_add(text,html,src);try{const x=qnLoad()[0];if(x)ghQueue(x)}catch(e){}return r}}
+{const _st=qnStore;qnStore=function(a){const r=_st(a);try{const x=(a||[]).slice().sort((p,q)=>String(q.tu||q.t).localeCompare(String(p.tu||p.t)))[0];if(x&&x.id&&(x.tu||x.add))ghQueue(x)}catch(e){}return r}}
+window.addEventListener("online",()=>setTimeout(ghFlush,2000));setInterval(ghFlush,90000);setTimeout(ghFlush,5000);
+/* settings */
+function ghStat(m){const el=$("ghSt");if(!el)return;el.textContent=m||(ghOn()?`On — notes are copied to ${GHB.repo}${GHB.q.length?` (${GHB.q.length} waiting)`:""}.`:"Off — paste the key to start.")}
+{const box=$("qaiSet");if(box&&!$("ghTok")){box.insertAdjacentHTML("beforeend",`<details style="margin-top:8px"><summary class="mini"><b>Notes backup for the 12-hour review</b> (private GitHub repository)</summary>
+ <p class="mini">Every saved note is copied to your private repository so Claude can review all notes every 12 hours. The key stays only in this browser. Paste it once on each device you use (phone and PC).</p>
+ <div class="btns"><input id="ghRepo" value="${esc(GHB.repo)}" style="min-width:220px" placeholder="owner/repository"><input id="ghTok" type="password" placeholder="github_pat_… key" style="flex:1;min-width:200px"><button type="button" class="b sm" id="ghSave">Save</button><button type="button" class="b sm ghost" id="ghTest">Test</button><button type="button" class="b sm ghost" id="ghAll">Send all saved notes now</button><button type="button" class="b sm ghost" id="ghOff">Remove key</button></div><div id="ghSt" class="mini"></div></details>`);
+ $("ghSave").onclick=()=>{const t=$("ghTok").value.trim(),rp=$("ghRepo").value.trim();if(t)GHB.tok=t;GHB.repo=rp||GHB.repo;try{localStorage.setItem("erGhRepo",GHB.repo);if(t)localStorage.setItem("erGhTok",t)}catch(e){}$("ghTok").value="";ghStat("Saved. Press Test.")};
+ $("ghOff").onclick=()=>{GHB.tok="";try{localStorage.removeItem("erGhTok")}catch(e){}ghStat()};
+ $("ghTest").onclick=async()=>{if(!ghOn())return ghStat("Paste the key first.");ghStat("testing…");try{await ghPut("notes/_test.json",{t:new Date().toISOString(),version:typeof ER_VERSION!=="undefined"?ER_VERSION:""});ghStat("Works — the test file was written to "+GHB.repo+".")}catch(e){ghStat("Failed: "+(e.message||e)+" — check the repository name and that the key has Contents: read and write on it.")}};
+ $("ghAll").onclick=()=>{if(!ghOn())return ghStat("Paste the key first.");qnLoad().forEach(x=>{const p=ghPath(x);if(!GHB.q.some(e=>e.p===p))GHB.q.push({p,o:Object.assign(ghNoteObj(x),{shorthand:x.raw||"",note:x.text||""})})});ghQStore();ghStat(`${GHB.q.length} notes queued…`);ghFlush()};
+ ghStat()}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
