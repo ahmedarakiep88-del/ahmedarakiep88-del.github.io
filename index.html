@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v248";
+const ER_VERSION="v249";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -20625,5 +20625,68 @@ function gsRank(cands,q,getText){const W=gsWords(q);if(!W.length)return [];retur
 setTimeout(()=>{try{const inp=$("oxSearch");if(!inp||inp.dataset.gs)return;inp.dataset.gs="1";inp.addEventListener("input",()=>{const q=inp.value.trim();const hitsEl=$("oxHits");if(!hitsEl||q.length<2)return;
  const W=gsWords(q);const L=gsRank(OX,q,t=>t.t+" "+t.k.join(" ")+" "+(t.d||[]).join(" ")).sort((a,b)=>{const ta=W.filter(w=>gsHas(a.t,w)).length,tb=W.filter(w=>gsHas(b.t,w)).length;return tb-ta}).slice(0,30);
  if(L.length&&(hitsEl.querySelectorAll("[data-oxo]").length===0||hitsEl.querySelectorAll("[data-oxo]").length<L.length))hitsEl.innerHTML=L.map(t=>`<a class="oxHit" data-oxo="${esc(t.i)}">${esc(t.t)} <span class="oxC">${esc(t.c)}${t.p&&t.p!=="—"?" p."+esc(t.p):""}</span></a>`).join("")})}catch(e){}},1600);
+/* p275 — Follow-up visit: a "Follow-up visit" button above the quick note opens a small box. Paste the previous note (from Epic or anywhere), enter the date of the first visit, then dictate / type today's comment as usual. Claude rewrites everything as one follow-up note: the HISTORY opens with age / sex and "This is a follow-up visit: the patient was first seen in the ED on <date> with …", restates the original history, findings, results and treatment, carries over the past medical history and the allergy line, then today's interval history and clearly says what is NEW since the first visit (or that nothing new was mentioned). Names, MRN and ID numbers in the pasted note are never copied. Works with the hands-free Shortcut too. Builds on the Return visit (p249). */
+const FU={on:false,full:"",date:""};
+function fuClean(s){return String(s||"").replace(/\r/g,"").split("\n").filter(l=>!/^\s*(?:name|patient name|mrn|medical record|file no|file number|id|iqama|national id|dob|date of birth|phone|mobile|address)\s*[:#]/i.test(l)).join("\n").replace(/\b(?:MRN|ID|Iqama)\s*[:#]?\s*\d{5,}\b/gi,"").replace(/\b\d{8,}\b/g,"").replace(/\n{3,}/g,"\n\n").trim().slice(0,6000)}
+function fuDateTxt(){if(!FU.date)return "";try{const d=new Date(FU.date+"T12:00:00");return isNaN(d)?"":d.toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}catch(e){return ""}}
+function fuPrevLines(){const L=FU.full.split("\n").map(l=>l.trim()).filter(Boolean);
+ const pmh=L.filter(l=>/^(?:past medical history|pmh|known case|medical history|comorbid)/i.test(l)||/^(?:no (?:significant )?past medical history|no chronic)/i.test(l)).slice(0,2);
+ const alg=L.filter(l=>/allerg|nkda|no known drug/i.test(l)&&!/advised|return|reaction to the medicines|signs of an allergic/i.test(l)).slice(0,1);
+ return {pmh,alg}}
+/* UI */
+function fuUI(){const ta=$("qnIn");if(!ta||$("fuBtn"))return;
+ ta.insertAdjacentHTML("beforebegin",`<div class="btns noprint" style="margin:0 0 6px"><button type="button" class="b sm ghost" id="fuBtn">🔁 Follow-up visit (paste previous note)</button></div>
+ <div id="fuBox" style="display:none;margin:0 0 8px;padding:8px 10px;border:1px solid #90caf9;border-left:4px solid #0d47a1;border-radius:8px;font-size:.8rem;background:var(--card,#fff)">
+ <b>Follow-up visit</b><div class="mini" style="margin:2px 0 6px">1) Paste the previous note · 2) date of the first visit · 3) press <b>Use</b>, then dictate or type today's comment in the box below. Claude rewrites it as one follow-up note: previous history, PMH and allergy carried over, today's findings and what is new. Names and MRN are removed.</div>
+ <textarea id="fuPrev" rows="6" style="width:100%;box-sizing:border-box" placeholder="Paste the previous note here"></textarea>
+ <div class="btns" style="margin-top:6px"><label class="mini">Date of the first visit <input type="date" id="fuDate"></label><button type="button" class="b sm" id="fuUse">Use</button><button type="button" class="b sm ghost" id="fuOff">Cancel follow-up</button></div><div id="fuSt" class="mini"></div></div>`);
+ $("fuBtn").onclick=()=>{const b=$("fuBox");b.style.display=b.style.display==="none"?"":"none";if(!$("fuDate").value){}};
+ $("fuUse").onclick=()=>{const t=fuClean($("fuPrev").value);if(t.length<15){$("fuSt").textContent="Paste the previous note first.";return}
+  FU.on=true;FU.full=t;FU.date=$("fuDate").value||"";const when=FU.date?new Date(FU.date+"T12:00:00").getTime():Date.now();
+  try{rvPick({id:"fu",t:when,title:"previous visit",text:t})}catch(e){}$("fuBox").style.display="none";fuBadge();
+  try{QAI.sig=""}catch(e){}try{if($("qnIn").value.trim())qnRun()}catch(e){}try{$("qnIn").focus()}catch(e){}try{notify("Follow-up visit: dictate today's comment.")}catch(e){}};
+ $("fuOff").onclick=()=>{fuReset();try{QAI.sig="";if($("qnIn").value.trim())qnRun()}catch(e){}}}
+function fuReset(){FU.on=false;FU.full="";FU.date="";try{RV.prev=null;rvBadge()}catch(e){}const b=$("fuBox");if(b)b.style.display="none";const p=$("fuPrev");if(p)p.value="";const d=$("fuDate");if(d)d.value="";fuBadge()}
+function fuBadge(){try{rvBadge();const el=$("rvBadge");if(!el||!FU.on||!RV.prev)return;el.style.background="#e3f2fd";el.style.color="#0d47a1";
+ el.innerHTML=`🔁 Follow-up visit — first seen ${esc(fuDateTxt()||"(date not given)")}: ${esc(RV.prev.imp||"previous note pasted")}. Dictate today's comment; say what is new, better, same or worse. <button type="button" class="b sm ghost" id="fuEdit" style="margin-left:6px">edit previous note</button> <button type="button" class="b sm ghost" id="fuX">not a follow-up</button>`;
+ $("fuEdit").onclick=()=>{$("fuBox").style.display=""};$("fuX").onclick=()=>{fuReset();try{QAI.sig="";if($("qnIn").value.trim())qnRun()}catch(e){}}}catch(e){}}
+setTimeout(fuUI,700);
+document.addEventListener("click",e=>{if(e.target.closest("#newPt")||e.target.closest("#qnClear")&&FU.on&&!e.target.closest("[data-qbr]"))fuReset()},true);
+/* note: follow-up wording + PMH / allergy carried over when today's note lacks them */
+function fuApply(B,fromAI){try{if(!FU.on||!B||!B.L)return B;const L=B.L;const d=fuDateTxt();
+ L.forEach(z=>{if(/^This is a return visit/.test(z[0]||"")){z[0]=z[0].replace(/^This is a return visit: the patient was seen in the ED on [^ ]+ with/,`This is a follow-up visit: the patient was first seen in the ED${d?" on "+d:""} with`).replace(/^This is a return visit/,"This is a follow-up visit")}});
+ if(fromAI){const ins=L.find(z=>/^This is a follow-up visit/.test(z[0]||""));if(ins&&L.some(z=>z!==ins&&/follow-up visit|first seen in the ED|previous (?:ED )?visit/i.test(z[0]||"")))L.splice(L.indexOf(ins),1)}
+ {const fl=L.filter(z=>/^This is a follow-up visit/.test(z[0]||""));if(fl.length>1){const keep=fl.reduce((a,b)=>(b[0].length>a[0].length?b:a));fl.forEach(z=>{if(z!==keep)L.splice(L.indexOf(z),1)})}}
+ const P=fuPrevLines();const txt=L.map(z=>z[0]||"").join("\n");let hi=L.findIndex(z=>/^This is a follow-up visit/.test(z[0]||""));if(hi<0)hi=L.findIndex(z=>z[1]==="h"&&z[0]==="HISTORY");
+ /* the previous note's PMH / allergy win over default negatives written by the rule-based draft */
+ const hasPMH=P.pmh.some(l=>!/^no /i.test(l)),hasAlg=P.alg.some(l=>!/^no |nkda|no known/i.test(l));
+ L.forEach(z=>{if(z[1]!=="neg"&&z[1]!=="")return;let t=z[0]||"";if(hasPMH)t=t.replace(/No (?:significant )?past medical history\.\s*/i,"").replace(/Not on regular medications\.\s*/i,"");if(hasAlg)t=t.replace(/No known (?:drug )?allergies\.\s*/i,"");z[0]=t.trim()});
+ for(let i=L.length-1;i>=0;i--)if(L[i][0]===""&&L[i][1]==="neg")L.splice(i,1);
+ const txt2=L.map(z=>z[0]||"").join("\n");
+ /* age / sex from the previous note when today's dictation does not give them */
+ if(!/\b\d{1,3}[- ](?:year|month|week|day)s?[- ]old\b/i.test(txt2)){const m=FU.full.match(/\b(\d{1,3})[- ](year|month)s?[- ]old (male|female|man|woman|boy|girl|gentleman|lady)/i);if(m&&hi>=0&&/^This is a follow-up visit/.test(L[hi][0]))L[hi][0]=L[hi][0].replace(/^This is a follow-up visit: the patient was first seen/,`A ${m[1]}-${m[2].toLowerCase()}-old ${m[3].toLowerCase()} attended for a follow-up visit: first seen`)}
+ /* the first visit's presenting history (rule-based draft only; Claude restates it itself) */
+ if(!fromAI&&hi>=0){const pl=FU.full.split("\n").map(l=>l.trim()).filter(Boolean);const k=pl.findIndex(l=>/^history$/i.test(l));const first=pl.slice(k+1).find(l=>/presented|complain|c\/o|history of/i.test(l));if(first&&!L.some(z=>/^At the first visit/.test(z[0]||""))){L.splice(hi+1,0,["At the first visit: "+first.replace(/^A \d{1,3}-(?:year|month)-old [a-z]+ /i,"the patient ").replace(/([^.])$/,"$1."),"pos"]);hi++}}
+ if(P.pmh.length&&!/past medical history|known case|no chronic/i.test(txt2)){L.splice(hi+1,0,[P.pmh[0].replace(/^pmh\s*:?/i,"Past medical history:").replace(/([^.])$/,"$1."),"pos"]);hi++}
+ if(P.alg.length&&!/allerg|nkda|no known drug/i.test(txt2.replace(/Advised to return[^\n]*/g,""))){L.splice(hi+1,0,[P.alg[0].replace(/([^.])$/,"$1."),"pos"])}
+ if(!L.some(z=>/new since the (?:first|previous|last) visit|no new (?:symptoms|complaints)/i.test(z[0]||"")||fromAI&&/\bnew\b/i.test(z[0]||"")&&z[1]!=="ret"&&!/new symptoms appear/i.test(z[0]||""))){const raw=String(($("qnIn")&&$("qnIn").value)||"");const no=/\bno(?:thing)? new\b/i.test(raw);const nw=no?null:raw.match(/\bnew\b[^.;\n]*/i);
+  let ei=L.findIndex(z=>z[1]==="h"&&z[0]==="EXAMINATION");if(ei<0){const h0=L.findIndex(z=>z[1]==="h"&&z[0]==="HISTORY");ei=h0+1;while(ei<L.length&&L[ei][1]!=="h")ei++}let ins=ei;while(ins>0&&L[ins-1][0]==="")ins--;
+  L.splice(ins,0,[nw?`New since the first visit: ${nw[0].replace(/^new\s*(?:symptoms?|complaints?)?\s*:?\s*/i,"").trim()}.`:"No new symptoms were mentioned at this visit.",nw?"pos":"neg"])}
+ return B}catch(e){return B}}
+{const _b=qnBuild;qnBuild=function(o,opt){return fuApply(_b(o,opt))}}
+if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){return fuApply(_t(J),true)}}
+/* Claude gets the whole previous note and the follow-up instructions */
+if(typeof qaiPrompt==="function"){const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){let s=_p(raw,opt,draft);try{if(FU.on&&FU.full){const d=fuDateTxt();s=s.replace(/RETURN VISIT:[^\n]*\n/,"");
+ s=s.replace("OUTPUT:",`FOLLOW-UP VISIT: the shorthand above is TODAY's comment. The PREVIOUS NOTE below is from the first ED visit${d?" on "+d:""}. Write ONE complete follow-up note:
+- HISTORY: first sentence age and sex as usual; then "This is a follow-up visit: the patient was first seen in the ED${d?" on "+d:""} with …" and restate briefly the original presenting history, the key positive and negative findings, the investigation results, the treatment given and the disposition from the previous note; then the past medical history and the allergy line exactly as in the previous note (unless today's comment changes them); then "Since the first visit …" / today's interval history from today's comment.
+- Say clearly what is NEW since the first visit (new symptoms, new findings, new results); if today's comment mentions nothing new, write "No new symptoms were mentioned at this visit." Never invent findings that are in neither note.
+- EXAMINATION, ASSESSMENT, MANAGEMENT, DISPOSITION: today's findings and plan from today's comment; in the ASSESSMENT compare with the first visit (better / same / worse) when said; keep all the usual rules (times, colours, medicines in one sentence, return advice if discharged).
+- Never copy names, MRN, ID or phone numbers. Do not copy the old disposition as today's disposition.
+PREVIOUS NOTE:
+"""
+${FU.full}
+"""
+OUTPUT:`)}}catch(e){}return s}}
+try{GD["Follow-up visit (paste previous note)"]=`<p>Above the quick note tap <b>🔁 Follow-up visit</b>, paste the previous note, enter the date of the first visit and tap <b>Use</b>. Then dictate today's comment (what is new, better / same / worse, today's examination and plan). Claude writes one follow-up note: the first visit restated, PMH and allergy carried over, today's findings and what is new. "New patient" or "not a follow-up" clears it.</p>`}catch(e){}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
