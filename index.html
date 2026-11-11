@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v250";
+const ER_VERSION="v251";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -20696,5 +20696,61 @@ try{GD["Follow-up visit (paste previous note)"]=`<p>Above the quick note tap <b>
  const hi=L.findIndex(z=>z[1]==="h"&&z[0]==="HISTORY");if(hi<0)return r;let i=hi+1;while(i<L.length&&!L[i][0]&&L[i][1]!=="h")i++;if(i>=L.length||L[i][1]==="h")return r;
  let t=L[i][0];if(!ageGiven)t=t.replace(/^An? (?:\d+-(?:day|week|month)-old )?(?:baby )?(boy|girl)\b/,(m,s)=>s==="boy"?"A male":"A female");
  t=t.replace(/^(An? [^:]*?) presented with this is an? (return|follow-up) visit: the patient was (first )?seen/i,(m,a,k,f)=>`${a} attended for a ${k.toLowerCase()} visit: ${f?"first ":""}seen`);L[i][0]=t}catch(e){}return r}}
+/* p277 — Safety review markers.
+ (1) Root-cause fix: "no X or Y" now negates the whole phrase however long X is (it was cut at 25 characters); a comma still ends the negation ("no fever, cough" = cough present). Before, in "no difficulty in swallowing or shortness of breath" the shortness of breath was read as present, so a dental-pain note got PERC / Wells with "D-dimer; CT pulmonary angiogram only if the D-dimer is raised".
+ (2) ORANGE + ⚠ for anything to check before submitting: a score / rule / classification that is incomplete (variables not documented, results pending), and any investigation named in the note that is NOT in the dictation (e.g. D-dimer, CT pulmonary angiogram). A small box under the note lists every orange line and why.
+ (3) ⚠ beside any text that would show in plain black (not one of the note colours) — headings excepted.
+ (4) San Francisco Syncope Rule (adult syncope): CHF history, haematocrit < 30%, abnormal ECG, shortness of breath, SBP < 90; unknown items are named and the line is orange until complete. */
+/* (1) list-aware negation */
+{const _qp=qnPositive;qnPositive=function(re,o){try{const t=String(o.raw||"").toLowerCase();const g=new RegExp(re.source,re.flags.includes("g")?re.flags:re.flags+"g");let m,any=false;
+ while((m=g.exec(t))){if(!m[0]){g.lastIndex++;continue}any=true;const s0=Math.max(t.lastIndexOf(".",m.index-1),t.lastIndexOf(";",m.index-1),t.lastIndexOf("\n",m.index-1))+1;const pre=t.slice(s0,m.index);
+  const nm=[...pre.matchAll(/\b(?:no|not|denies|denied|denying|without|nor|negative for|free of|absence of)\b/g)].pop();
+  if(!nm)return true;const after=pre.slice(nm.index+nm[0].length);
+  if(/\b(?:but|however|although|though|has|have|had|having|with|complains?|complaining|reports?|reported|presents?|presented|positive|present|noted|associated|developed|started|now|also)\b/.test(after))return true;
+  if(after.length>90||/[,:(]/.test(after))return true}
+ return any?false:_qp(re,o)}catch(e){return _qp(re,o)}}}
+/* (1b) the shorthand splitter: in "no A or B" the B is also negative (it was cut off as a positive symptom) */
+{const _c=qnChunk;qnChunk=function(seg){const out=_c(seg);try{if(out.length<2)return out;let negOn=false;return out.map((p,k)=>{const l=p.toLowerCase().trim();
+ if(k>0&&negOn&&/\b(?:or|nor)\s*$/.test(out[k-1].toLowerCase().trim())&&!/^(?:no|not|denies|without|negative)\b/.test(l)){p="no "+p.replace(/^(?:or|nor)\s+/i,"")}
+ negOn=/^(?:no|not|denies|without|negative for|nor)\b/.test(p.toLowerCase().trim());return p.replace(/\s+(?:or|nor)\s*$/i,"")})}catch(e){return out}}}
+/* (1c) age for the carer wording: "30 female … cough for 2 days" was read as a 2-day-old (advice went to "the parents … the child"). The parser's age wins; a duration only counts as an age when it says "old". */
+{const _ay=ageYFromRaw;ageYFromRaw=function(raw){try{const o=qnParse(String(raw||""));if(o&&o.age!=null&&o.age!==""){const u=o.ageU||"year";return u==="month"?o.age/12:u==="week"?o.age/52:u==="day"?o.age/365:+o.age}
+ const r=String(raw||"");const m=r.match(/\b(\d{1,3})\s*(?:-|\s)?(?:years?|yrs?|yo|y\/o)\b|\b(\d{1,3})\s*(?:-|\s)?(months?|weeks?|days?)[- ]?old\b/i);if(!m)return null;if(m[1])return +m[1];const n=+m[2],u=m[3].toLowerCase();return /^m/.test(u)?n/12:/^w/.test(u)?n/52:n/365}catch(e){return _ay(raw)}}}
+/* (4) San Francisco Syncope Rule */
+{const _s=scScores;scScores=function(o){const r=_s(o);try{/* PE rules only when breathlessness / pleuritic pain / PE is really dictated as present (the symptom list could hold a negated "shortness of breath") */
+ if(r.lines.some(l=>/^(?:PERC|Wells score for PE)/.test(l))){const t0=String(o.raw||"").toLowerCase();const real=qnPositive(/pleuritic|pulmonary embol|\bpe\b(?! tube)|\bdyspn|short(?:ness)? of breath|\bsob\b|breathless|difficulty (?:in )?breathing/,o)||/hemoptysis|haemoptysis|\?pe\b|rule out pe|d-?dimer|wells|perc/.test(t0);
+  if(!real){r.lines=r.lines.filter(l=>!/^(?:PERC|Wells score for PE)/.test(l));try{r.flags=r.flags.filter(f=>!/PERC|Wells/.test(f.score||f.s||JSON.stringify(f)))}catch(e){}}}}catch(e){}try{const t=String(o.raw||"").toLowerCase();const age=scAge(o);if(age!==null&&age<18)return r;
+ const pos=rx=>qnPositive(rx,o);if(!pos(/syncop|faint(?:ed|ing)?\b|passed out|transient loss of consciousness/)||/san francisco|\bsfsr\b|\bchess\b/.test(t)||o.trauma||/ectopic|pregnan|\bweeks? (?:of )?gestation|\blmp\b|heat ?stroke|heat exhaustion|hypoglyc|seizure|\bfits?\b|convuls|bleed|melena|melaena|hematemesis|haematemesis|anaphyla/.test(t+" "+(()=>{try{return JSON.stringify(o).toLowerCase()}catch(e){return ""}})()))return r;
+ const V=o.vit||{};const SBP=V.BP?+String(V.BP).split("/")[0]:null;const hct=(t.match(/\b(?:hct|haematocrit|hematocrit|pcv)\s*(?:of\s*|is\s*|=\s*)?(\d{2}(?:\.\d)?)/)||[])[1];
+ const ecgN=/\b(?:ecg|ekg)\b[^.;\n]{0,40}\b(?:normal|unremarkable|nsr|sinus rhythm)\b|normal (?:ecg|ekg)/.test(t)&&!/\b(?:ecg|ekg)\b[^.;\n]{0,40}\b(?:abnormal|st (?:elevation|depression)|t wave inversion|block|af\b|atrial fibrillation|brady|tachy|qt)/.test(t);
+ const ecgA=pos(/\b(?:ecg|ekg)\b[^.;\n]{0,40}\b(?:abnormal|st (?:elevation|depression)|t[- ]wave inversion|block|atrial fibrillation|\baf\b|bradycardia|tachycardia|long qt|prolonged qt)|new (?:ecg )?changes/);
+ const C=pos(/heart failure|cardiac failure|\bchf\b|\bccf\b|\bhf\b/),Sb=pos(/shortness of breath|\bsob\b|dyspn|breathless/);
+ const items=[["history of congestive heart failure",C?true:false],["haematocrit < 30%",hct!=null?(+hct<30):null],["abnormal ECG",ecgA?true:ecgN?false:null],["shortness of breath",Sb],["triage SBP < 90 mmHg",SBP!==null?SBP<90:null]];
+ const posI=items.filter(x=>x[1]===true).map(x=>x[0]),unk=items.filter(x=>x[1]===null).map(x=>x[0]);
+ r.lines.push(posI.length?`San Francisco Syncope Rule positive (${posI.join(", ")}): high risk of a serious outcome — further assessment / admission${unk.length?`; ${unk.join(" and ")} not yet documented`:""}.`:unk.length?`San Francisco Syncope Rule: incomplete — ${unk.join(" and ")} not yet documented; no positive item so far.`:`San Francisco Syncope Rule negative (no CHF, Hct ≥ 30%, normal ECG, no shortness of breath, SBP ≥ 90): low risk of a serious outcome.`);
+ if(unk.length)try{r.flags.push({score:"San Francisco Syncope Rule",miss:unk})}catch(e){}}catch(e){}return r}}
+/* (2)+(3) review markers */
+const CHK_SCORE=/\b(?:score|rule|criteria|classification|qsofa|q-sofa|sofa|curb-?65|crb-?65|heart score|wells|perc|centor|mcisaac|feverpain|ottawa|nexus|pecarn|canadian|alvarado|pas\b|blatchford|westley|san francisco|news2?|gcs|glasgow|cha2ds2|has-bled|timi|grace|abcd2|nihss|apgar|killip|child-pugh|ranson|bisap|hasbled)\b/i;
+const CHK_UNK=/\b(?:incomplete|not (?:yet )?documented|not (?:yet )?dictated|not (?:yet )?known|unknown|cannot be (?:calculated|scored|applied|completed)|pending|awaiting|to be confirmed|so far|not available|not recorded)\b|≥ \d+ so far/i;
+const CHK_TESTS=[["D-dimer",/d-?dimer/i,/d-?dimer|ddimer/i],["CT pulmonary angiogram",/ct pulmonary angiogra|\bctpa\b|pulmonary angiogra/i,/ctpa|ct pulmonary|ct chest|angiogra|ct angio/i],["CT scan",/\bct\b(?! pulmonary)|computed tomograph/i,/\bct\b|cat scan|computed tomograph|scan/i],["MRI",/\bmri\b|magnetic resonance/i,/\bmri\b|magnetic/i],["X-ray",/x-?ray|radiograph/i,/x-?ray|xray|radiograph|\bcxr\b|\bfilm\b|\bxr\b/i],["ultrasound",/ultrasound|sonograph|doppler|\bfast scan\b|\befast\b/i,/ultrasound|\bus\b|u\/s|sono|doppler|\bfast\b|\bpocus\b|\bscan\b/i],["troponin",/troponin/i,/troponin|\btrop\b|\btnt\b|\btni\b/i],["ECG",/\becg\b|\bekg\b|electrocardiogra/i,/\becg\b|\bekg\b|electrocardiogra|ecg/i],["lactate",/lactate|lactic/i,/lactate|lactic/i],["blood culture",/blood cultures?/i,/culture/i],["urine test",/urinalysis|urine (?:dipstick|culture|test|analysis)|\bufr\b/i,/urine|\bua\b|dipstick|\bufr\b|\bum\b/i],["CBC",/\bcbc\b|\bfbc\b|full blood count|complete blood count/i,/\bcbc\b|\bfbc\b|blood count|\bbloods?\b|\blabs?\b|hb\b|wbc|platelet/i],["CRP",/\bcrp\b|c-reactive/i,/\bcrp\b|c-reactive|inflammatory markers/i],["liver tests",/\blfts?\b|liver function/i,/\blfts?\b|liver/i],["lipase / amylase",/lipase|amylase/i,/lipase|amylase/i],["pregnancy test",/pregnancy test|\bb?-?hcg\b|beta[- ]hcg/i,/pregnan|hcg|\bupt\b/i],["blood gas",/\b[av]bg\b|blood gas/i,/\b[av]bg\b|blood gas|gas/i],["coagulation",/\binr\b|coagulation|\bpt\/|\baptt\b/i,/\binr\b|coag|\bpt\b|aptt/i],["procalcitonin",/procalcitonin/i,/procalcitonin|\bpct\b/i]];
+const CHK_NOTNEEDED=/\b(?:not (?:required|indicated|needed|necessary)|no (?:need|indication)|without the need|not done|was not performed|declined)\b/i;
+let CHK=null,CHKLAST=[];
+function chkRaw(){let r=String(($("qnIn")&&$("qnIn").value)||"");try{if(typeof FU!=="undefined"&&FU.on&&FU.full)r+="\n"+FU.full}catch(e){}return r}
+function chkCompute(B){const M=new Map();try{if(!B||!B.L||B.addendum)return M;const raw=chkRaw();let sec="";
+ B.L.forEach(([t,k])=>{if(!t)return;if(k==="h"){sec=String(t).toUpperCase();return}if(/^(?:Advised to return|The patient (?:and|was) (?:advised|given)|Nursing instructions)/i.test(t))return;
+  const why=[];if(CHK_SCORE.test(t)&&CHK_UNK.test(t)&&!/^(?:HISTORY)/.test(sec))why.push("score / rule incomplete — variables not yet known");
+  if(!CHK_NOTNEEDED.test(t)){const miss=CHK_TESTS.filter(([n,inNote,inRaw])=>inNote.test(t)&&!inRaw.test(raw)).map(x=>x[0]);if(miss.length)why.push("not in your dictation: "+miss.join(", "))}
+  if(why.length)M.set(t,why.join("; "))})}catch(e){}return M}
+{const _h=qnHTML;qnHTML=function(B,inline){let cur=false;try{cur=!!B&&(B===(typeof QAI!=="undefined"&&QAI.B)||B===(typeof qnLast!=="undefined"&&qnLast&&qnLast.B))}catch(e){}
+ if(!cur)return _h(B,inline);CHK=chkCompute(B);CHKLAST=[...CHK.entries()];try{return _h(B,inline)}finally{CHK=null;setTimeout(chkBox,0)}}}
+const CHK_OR="color:#e65100;font-weight:bold";
+{const _l=c3Line;c3Line=function(t,k,sec,age){const r=_l(t,k,sec,age);try{if(CHK&&CHK.has(t))return `<span class="c3o" style="${CHK_OR}" title="${esc(CHK.get(t))}">⚠ ${esc(t)}</span>`;
+ if(CHK&&!/style="[^"]*color/.test(r)&&r.replace(/<[^>]+>/g,"").trim().length>1)return `<span style="${CHK_OR}">⚠</span> ${r}`}catch(e){}return r}}
+function chkBox(){try{const out=$("qnOut");if(!out)return;let b=$("chkBox");if(!CHKLAST.length){if(b)b.remove();return}
+ if(!b){out.insertAdjacentHTML("afterend",`<div id="chkBox" class="noprint" style="margin:6px 0;padding:6px 9px;border:1px solid #ffb74d;border-left:4px solid #e65100;border-radius:8px;background:#fff8e1;font-size:.78rem"></div>`);b=$("chkBox")}
+ b.innerHTML=`<b style="color:#e65100">⚠ Check before submitting (${CHKLAST.length})</b><ul style="margin:4px 0 0 16px;padding:0">${CHKLAST.map(([t,w])=>`<li><span style="color:#e65100">${esc(t.length>110?t.slice(0,110)+"…":t)}</span> — <i>${esc(w)}</i></li>`).join("")}</ul><div class="mini">Orange lines are for your review: correct the dictation or delete the line in Epic.</div>`}catch(e){}}
+try{GD["Orange lines and ⚠ — check before submitting"]=`<p><b style="color:#e65100">Orange with ⚠</b>: a score / rule / classification that is still incomplete (variables not documented or results pending — e.g. qSOFA, San Francisco Syncope Rule, PERC), or an investigation named in the note that you did not dictate (e.g. D-dimer, CT pulmonary angiogram). A box under the note lists each one and why. ⚠ is also put beside any text that is not in one of the note colours.</p>`}catch(e){}
+/* Claude: never name an investigation, result or score input that is not in the dictation */
+if(typeof qaiPrompt==="function"){const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n","RULES\n0n. NEVER write an investigation, a result or a value that is not in the shorthand (e.g. do not write D-dimer, CT pulmonary angiogram, troponin, X-ray, blood results unless dictated). A negated symptom (\"no X or Y\") is absent — do not start a work-up for it. A decision score whose inputs are not dictated is written as incomplete, naming what is missing.\n")}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
