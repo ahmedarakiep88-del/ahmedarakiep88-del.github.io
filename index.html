@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v252";
+const ER_VERSION="v253";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -21159,5 +21159,94 @@ try{GD["Notifiable diseases (Saudi MOH, HESN)"]=`<p><b>Notify through HESN</b> a
 if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){try{(J.sections||[]).forEach(s=>(s.lines||[]).forEach(l=>{if(l&&l.t)l.t=String(l.t).replace(/([0-9a-zA-Zµ%])\s*\/\s*(min|minute|h|hr|hrs|hour|day|d|kg|dl|l|ml|mmhg|week|wk|month|year|24 ?h|m2|m²)\b/gi,"$1∕$2")}))}catch(e){}return _t(J)}}
 /* remove a section heading left empty */
 {const _a=auditApply;auditApply=function(B,raw){const R=_a(B,raw);try{if(R&&R.L){const L=R.L;for(let i=L.length-1;i>=0;i--){if(L[i][1]!=="h")continue;let j=i+1;while(j<L.length&&!L[j][0]&&L[j][1]!=="h")j++;if(j>=L.length||L[j][1]==="h"){L.splice(i,j-i);if(i>0&&!L[i-1][0]&&L[i-1][1]!=="h")L.splice(i-1,1)}}}}catch(e){}return R}}
+/* p279 — (1) Clostridioides difficile: infection-control alert (not on the MOH notifiable list) with safety instructions: contact precautions, soap and water (alcohol gel does not kill spores), single room with own toilet until 48 h without diarrhoea, chlorine cleaning, treatment and what to stop.
+ (2) "⚠ Notifiable disease?" question at the end of BOTH the full form (under the note) and the quick note: No / Yes. Yes opens a search box for the disease (any name or synonym), each chosen disease has Suspected / Confirmed, plus ticks for "ID / infection control informed at HH:MM" and "Close contacts asked about". Diseases found automatically are listed there too and can be switched to confirmed or removed.
+ (3) The full (regular) form now gets the same notifiable lines as the quick note: ⚠ NOTIFIABLE DISEASE (suspected / confirmed) in ASSESSMENT; informed / HESN, isolation and close contacts in MANAGEMENT; the detail box under the note. */
+ND.push({id:"cdiff",n:"Clostridioides difficile infection (C. difficile)",cat:"IC",
+ iso:"contact precautions — single room with its own toilet / commode, gloves and gown for all contact; wash hands with SOAP AND WATER (alcohol gel does not kill C. difficile spores); dedicated equipment; clean with chlorine-based (bleach) disinfectant",
+ dur:"until 48 hours without diarrhoea (formed stool) — and keep for the whole admission if recurrence risk is high, per infection control",
+ home:"wash hands with soap and water after the toilet and before eating (alcohol gel does not work); clean the toilet daily with bleach; separate towels; stay off work / school until 48 h without diarrhoea; tell any doctor you had C. difficile before any antibiotic",
+ tx:["Stool for C. difficile toxin / PCR (only unformed stool)","Stop the offending antibiotic if possible; review / stop proton-pump inhibitors","NO antimotility drugs (loperamide, codeine)","First episode: oral vancomycin 125 mg four times daily for 10 days, or fidaxomicin 200 mg twice daily for 10 days (metronidazole 500 mg PO three times daily for 10 days only if neither is available, non-severe)","Severe (WBC > 15, creatinine > 133 µmol/L / 1.5 mg/dL, temperature > 38.5): oral vancomycin 125 mg four times daily; fulminant (shock, ileus, megacolon): oral / NG vancomycin 500 mg four times daily + metronidazole 500 mg IV every 8 h + surgical review","FBC, U&E, lactate; abdominal X-ray / CT if distension"],
+ ask:["Recent antibiotics (last 3 months), hospital / care-home stay, PPI use","Household members or ward neighbours with diarrhoea"],
+ pep:["No prophylaxis for contacts; symptomatic contacts → stool test","Household: soap-and-water hand washing and bleach cleaning of the toilet"],
+ vul:["Elderly, immunocompromised and people on antibiotics are at highest risk — avoid sharing the toilet"],
+ prev:["Antibiotic stewardship; flag the record (recurrence ~20%)","Health workers: soap-and-water hand washing between patients"],
+ cs:"household members were advised soap-and-water hand washing, bleach cleaning of the toilet and stool testing if diarrhoea"});
+NDBY.cdiff=ND[ND.length-1];
+ND_RX.push(["cdiff",/c\.? ?diff(?:icile)?\b|clostridi(?:um|oides) difficile|\bcdi\b|pseudomembranous colitis|c diff toxin/]);
+try{GD["Notifiable: "+NDBY.cdiff.n]=ndBoxHTML(NDBY.cdiff,"");GD["Clostridioides difficile (C. diff) — infection control"]=ndBoxHTML(NDBY.cdiff,"")}catch(e){}
+function ndCatTxt(d){return d.cat==="I"?"Saudi MOH notification IMMEDIATELY through HESN":d.cat==="72"?"Saudi MOH notification within 72 hours through HESN":"infection-control alert (not on the MOH notifiable list) — inform infection control"}
+/* state of the question, per mode */
+const NDS={form:{ans:null,man:{},off:{},inf:false,t:"",cs:false},quick:{ans:null,man:{},off:{},inf:false,t:"",cs:false}};
+function ndMerge(mode,auto){const S=NDS[mode];const out=[];(auto||[]).forEach(h=>{if(S.off[h.id]||S.ans==="no")return;out.push({id:h.id,st:S.man[h.id]||h.st,why:h.why,auto:true})});
+ Object.keys(S.man).forEach(id=>{if(S.ans==="no"||S.off[id]||out.some(x=>x.id===id))return;if(NDBY[id])out.push({id,st:S.man[id],man:true})});return out}
+/* lines for any note */
+function ndLines(hits,disc,inf,cs){const A=[],M=[];if(!hits.length)return {A,M};
+ hits.forEach(h=>{const d=NDBY[h.id];A.push([`⚠ ${d.cat==="IC"?"INFECTION CONTROL ALERT":"NOTIFIABLE DISEASE"} (${h.st}): ${d.n} — ${ndCatTxt(d)}${h.why?` (${h.why})`:""}.`,"nd"])});
+ const notif=hits.filter(h=>NDBY[h.id].cat!=="IC"),ic=hits.filter(h=>NDBY[h.id].cat==="IC");const nm=a=>a.map(h=>NDBY[h.id].n.replace(/\s*\(.*?\)\s*/g," ").trim()).join(" / ");const stw=a=>a.every(h=>h.st==="confirmed")?"confirmed":"suspected";
+ const at=inf&&inf.t?` at ${inf.t}`:"";
+ if(notif.length){const anyInf=notif.some(h=>!/not infectious/.test(NDBY[h.id].iso));
+  M.push(anyInf?[`⚠ The infectious diseases / infection control team was informed${at} about the ${stw(notif)} case (${nm(notif)}) and it was notified to public health through HESN; isolation and preventive measures were taken.`,"ndn"]:[`⚠ The case (${nm(notif)}) was notified to public health through HESN${at}; preventive measures were advised.`,"ndn"])}
+ if(ic.length)M.push([`⚠ The infection control team was informed${at} about the ${stw(ic)} case (${nm(ic)}); contact precautions and soap-and-water hand hygiene were started.`,"ndn"]);
+ hits.forEach(h=>{const d=NDBY[h.id];const short=d.n.split(" (")[0];if(/not infectious/.test(d.iso)){if(disc&&d.home)M.push([`Advice (${short}): ${d.home}.`,"ndi"]);return}
+  if(/^standard precautions/.test(d.iso)&&!d.dur&&!(disc&&d.home))return;M.push(disc&&d.home?[`Home isolation (${short}): ${d.home}.`,"ndi"]:[`Isolation (${short}): ${d.iso}${d.dur?` — ${d.dur}`:""}.`,"ndi"])});
+ hits.forEach(h=>{const d=NDBY[h.id];if(d.cs)M.push([`Close contacts (${d.n.split(" (")[0]}): ${d.cs}.`,"ndc"])});return {A,M}}
+const ND_MARK=/^(?:⚠ NOTIFIABLE DISEASE|⚠ INFECTION CONTROL ALERT|⚠ The infectious diseases|⚠ The infection control team was informed|⚠ The case \(|Isolation \(|Home isolation \(|Advice \(|Close contacts \()/;
+/* quick note: re-defined to merge the question's answers */
+ndApply=function(B,raw){try{if(!B||!B.L||B.addendum)return B;const L=B.L;try{const qi=$("qnIn")&&$("qnIn").value;if(qi&&qi!==raw)raw=String(raw||"")+"\n"+qi}catch(e){}
+ for(let i=L.length-1;i>=0;i--)if(ND_MARK.test(L[i][0]||"")&&/^nd/.test(L[i][1]||""))L.splice(i,1);
+ const auto=ndDetect(raw,B);B.ndAuto=auto;const hits=ndMerge("quick",auto);B.nd=hits;const S=NDS.quick;if(!hits.length){setTimeout(()=>ndWidget("quick"),0);return B}
+ const txt=L.map(z=>z[0]||"").join("\n");const disc=/discharged|sent home|home isolation/i.test(txt)&&!/under observation|admitted|admission|transferred/i.test(txt);
+ let inf=null;try{const q=$("qnIn")&&$("qnIn").value;const a1=q?ndInformed(q):null,a2=ndInformed(raw);inf=(a1&&a1.t)?a1:(a2&&a2.t)?a2:(a1||a2)}catch(e){}if(S.inf)inf={t:S.t||(inf&&inf.t)||""};
+ const cs=ndContactsSaid(raw)||S.cs;
+ if(inf&&inf.t)for(let i=L.length-1;i>=0;i--){const t=L[i][0]||"";if(L[i][1]!=="h"&&new RegExp("on-?call (?:team|doctor|physician)?\\s*(?:was|were)? ?contacted at "+inf.t.replace(":","[:.]"),"i").test(t)&&/\b(?:id|infectious|infection control|ipc|public health)\b/i.test(String(raw))&&!/\b(?:surgery|surgical|medicine|medical|ortho|paediatric|pediatric|obs|gyn|cardio|neuro|uro|ent|icu)\b/i.test(t))L.splice(i,1)}
+ if(inf)for(let i=L.length-1;i>=0;i--){const t=L[i][0]||"";if(L[i][1]!=="h"&&t.length<90&&/^(?:the )?(?:id|infectious diseases?|infection (?:control|prevention)|ipc|public health)(?: team)?(?: was| were)? (?:informed|notified|contacted|called|aware)\b|^(?:informed|notified|contacted|called) (?:the )?(?:id|infectious diseases?|infection control|ipc|public health)\b/i.test(t))L.splice(i,1)}
+ const {A,M}=ndLines(hits,disc,inf,cs);
+ let ai=L.findIndex(z=>z[1]==="h"&&z[0]==="ASSESSMENT");let ins;if(ai>=0){ins=ai+1;while(ins<L.length&&L[ins][1]!=="h"&&/^(?:Impression|Differential|Working)/i.test(L[ins][0]||""))ins++}else{ai=L.findIndex(z=>z[1]==="h"&&z[0]==="HISTORY");ins=ai>=0?ai+1:0;while(ins<L.length&&L[ins][1]!=="h")ins++}
+ L.splice(ins,0,...A);
+ let mi=L.findIndex(z=>z[1]==="h"&&z[0]==="MANAGEMENT");if(mi<0){const di=L.findIndex(z=>z[1]==="h"&&z[0]==="DISPOSITION");const at=di>=0?di:L.length;L.splice(at,0,["MANAGEMENT","h"]);mi=at}
+ L.splice(mi+1,0,...M);B.ndInf=!!inf;B.ndCs=cs;setTimeout(()=>ndWidget("quick"),0)}catch(e){console.warn("p279",e)}return B};
+/* full (regular) form: lines into the note text */
+let NDF={auto:[],hits:[]};
+{const _nt=noteText;noteText=function(){let t=_nt.apply(this,arguments);try{if(typeof S==="undefined"||!S.sel)return t;
+ const body=t.split("\n").filter(l=>!/^Advised to return immediately if/.test(l)).join("\n");const auto=ndDetect(body,null);NDF.auto=auto;const hits=ndMerge("form",auto);NDF.hits=hits;if(!hits.length)return t;
+ const St=NDS.form;const disc=/discharged|sent home/i.test(t)&&!/under observation|admitted|admission|transferred/i.test(t);const inf=St.inf?{t:St.t||""}:ndInformed(body);const cs=St.cs;NDF.inf=!!inf;NDF.cs=!!cs;
+ const {A,M}=ndLines(hits,disc,inf,cs);t=nIns(t,A.map(x=>x[0]),"assess");t=nIns(t,M.map(x=>x[0]),"mx")}catch(e){console.warn("p279 form",e)}return t}}
+{const _n=noteHTML;noteHTML=function(t){let h=_n(t);try{if(!NDF.hits.length)return h;h=h.split(/(\n|<br\s*\/?>)/).map(line=>{if(/^(?:\n|<br\s*\/?>)$/.test(line))return line;const txt=c3Unesc(line.replace(/<[^>]+>/g,""));if(!ND_MARK.test(txt)||/Advised to return immediately/.test(txt))return line;
+  if(/^⚠ (?:NOTIFIABLE|INFECTION CONTROL ALERT)/.test(txt))return `<span style="color:#b71c1c;font-weight:bold;font-size:1.08em">${esc(txt)}</span>`;
+  if(/^⚠ The /.test(txt))return NDF.inf?`<span style="color:#b71c1c;font-weight:bold">${esc(txt)}</span>`:`<span style="color:#e65100;font-weight:bold" title="Tick 'ID / infection control informed' when done">${esc(txt)}</span>`;
+  if(/^Close contacts \(/.test(txt))return NDF.cs?`<span style="color:#0d47a1">${esc(txt)}</span>`:`<span style="color:#e65100;font-weight:bold" title="Tick 'Close contacts asked about' when done">⚠ ${esc(txt)}</span>`;
+  return `<span style="color:#0d47a1">${esc(txt)}</span>`}).join("")}catch(e){}return h}}
+{const _r=renderOut;renderOut=function(){_r();try{ndWidget("form");let b=$("ndBoxF");const host=$("note");if(!host)return;if(!NDF.hits.length){if(b)b.remove();return}
+ if(!b){const w=$("ndW_form")||host;w.insertAdjacentHTML("afterend",`<div id="ndBoxF" class="noprint"></div>`);b=$("ndBoxF")}b.innerHTML=NDF.hits.map(h=>ndBoxHTML(NDBY[h.id],h.st)).join("")}catch(e){}}}
+/* quick-note box: use the merged list */
+ndBox=function(){try{const out=$("qnOut");if(!out)return;let b=$("ndBox");const B=(typeof QAI!=="undefined"&&QAI.B)||(qnLast&&qnLast.B);const hits=(B&&B.nd)||[];if(!hits.length){if(b)b.remove();return}
+ if(!b){const anchor=$("ndW_quick")||$("chkBox")||out;anchor.insertAdjacentHTML("afterend",`<div id="ndBox" class="noprint"></div>`);b=$("ndBox")}b.innerHTML=hits.map(h=>ndBoxHTML(NDBY[h.id],h.st)).join("")}catch(e){}};
+/* the question widget */
+function ndSearch(q){q=String(q||"").trim().toLowerCase();if(q.length<2)return [];const words=q.split(/\s+/);
+ return ND.filter(d=>{const hay=(d.n+" "+d.id).toLowerCase();const rx=(ND_RX.find(x=>x[0]===d.id)||[])[1];return words.every(w=>hay.includes(w))||(rx&&rx.test(q))}).slice(0,10)}
+function ndRefresh(mode){if(mode==="form"){try{renderOut()}catch(e){}return}
+ try{const B=(typeof QAI!=="undefined"&&QAI.B)||(qnLast&&qnLast.B);if(!B)return;ndApply(B,$("qnIn").value);$("qnOut").innerHTML=qnHTML(B,false)}catch(e){}}
+function ndWidget(mode){try{const host=mode==="form"?$("note"):$("qnOut");if(!host)return;let w=$("ndW_"+mode);
+ if(!w){host.insertAdjacentHTML("afterend",`<div id="ndW_${mode}" class="noprint" style="margin:6px 0;padding:7px 9px;border:1px solid #ef9a9a;border-left:5px solid #b71c1c;border-radius:8px;background:#fff;font-size:.82rem"></div>`);w=$("ndW_"+mode)}
+ if(w.contains(document.activeElement)&&document.activeElement.id===`ndQ_${mode}`)return;
+ const St=NDS[mode];const hits=mode==="form"?NDF.hits:(((typeof QAI!=="undefined"&&QAI.B)||(qnLast&&qnLast.B)||{}).nd||[]);const ans=St.ans||(hits.length?"yes":null);
+ const btn=(v,l)=>`<button type="button" class="b sm${ans===v?"":" ghost"}" data-ndans="${v}" style="${ans===v?(v==="yes"?"background:#b71c1c;border-color:#b71c1c;color:#fff":"background:#2e7d32;border-color:#2e7d32;color:#fff"):""}">${l}</button>`;
+ const chips=hits.map(h=>`<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:4px 0"><b style="color:#b71c1c">⚠ ${esc(NDBY[h.id].n)}</b>${h.auto?`<span class="mini">(found in the note)</span>`:""}<span class="btns" style="margin:0"><button type="button" class="b sm${h.st==="suspected"?"":" ghost"}" data-ndst="${h.id}|suspected">Suspected</button><button type="button" class="b sm${h.st==="confirmed"?"":" ghost"}" data-ndst="${h.id}|confirmed">Confirmed</button><button type="button" class="b sm ghost" data-ndrm="${h.id}" title="Remove — not notifiable">✕</button></span></div>`).join("");
+ w.innerHTML=`<div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center"><b style="color:#b71c1c">⚠ Notifiable disease?</b>${btn("no","No")}${btn("yes","Yes")}${ans===null?`<span class="mini" style="color:#e65100">please answer before submitting</span>`:""}</div>
+ ${ans==="yes"?`${chips||`<div class="mini">No disease chosen yet — search below.</div>`}
+ <input id="ndQ_${mode}" placeholder="Search notifiable disease (e.g. measles, TB, chickenpox, MERS, food poisoning, C. diff)…" style="width:100%;box-sizing:border-box;margin-top:4px" autocomplete="off"><div id="ndR_${mode}"></div>
+ <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:6px"><label><input type="checkbox" data-ndinf="1"${St.inf?" checked":""}> ID / infection control informed</label><label class="mini">at <input type="time" data-ndt="1" value="${esc(St.t)}" style="width:90px"></label><label><input type="checkbox" data-ndcs="1"${St.cs?" checked":""}> Close contacts asked about</label></div>`:ans==="no"?`<div class="mini">Marked as not notifiable.</div>`:""}`;
+ const q=$("ndQ_"+mode),R=$("ndR_"+mode);if(q)q.oninput=()=>{const L=ndSearch(q.value);R.innerHTML=L.length?L.map(d=>`<a href="#" data-ndadd="${d.id}" style="display:block;padding:3px 4px;border-bottom:1px solid #eee;text-decoration:none;color:#b71c1c">+ ${esc(d.n)} <span class="mini">(${d.cat==="I"?"immediately":d.cat==="72"?"within 72 h":"infection control"})</span></a>`).join(""):q.value.trim().length>1?`<div class="mini">No match — try another name.</div>`:""};
+ w.onclick=e=>{const a=e.target.closest("[data-ndans],[data-ndst],[data-ndrm],[data-ndadd]");if(!a)return;e.preventDefault();
+  if(a.dataset.ndans){St.ans=a.dataset.ndans;if(St.ans==="yes")St.off={}}
+  else if(a.dataset.ndst){const [id,st]=a.dataset.ndst.split("|");St.man[id]=st}
+  else if(a.dataset.ndrm){const id=a.dataset.ndrm;delete St.man[id];St.off[id]=true}
+  else if(a.dataset.ndadd){const id=a.dataset.ndadd;St.ans="yes";delete St.off[id];St.man[id]=St.man[id]||"suspected"}
+  ndRefresh(mode);setTimeout(()=>ndWidget(mode),0)};
+ w.onchange=e=>{const t=e.target;if(t.dataset.ndinf)St.inf=t.checked;else if(t.dataset.ndcs)St.cs=t.checked;else if(t.dataset.ndt){St.t=t.value;if(t.value)St.inf=true}else return;ndRefresh(mode);setTimeout(()=>ndWidget(mode),0)}}catch(e){console.warn("ndWidget",e)}}
+/* new patient / clear resets the answers */
+document.addEventListener("click",e=>{if(e.target.closest("#newPt"))NDS.form={ans:null,man:{},off:{},inf:false,t:"",cs:false};if(e.target.closest("#qnClear,#qnNew,#newPt"))NDS.quick={ans:null,man:{},off:{},inf:false,t:"",cs:false}},true);
+setTimeout(()=>{ndWidget("quick");ndWidget("form")},1200);
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
