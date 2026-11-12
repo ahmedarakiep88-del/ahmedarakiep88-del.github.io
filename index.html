@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v251";
+const ER_VERSION="v252";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -20752,5 +20752,412 @@ function chkBox(){try{const out=$("qnOut");if(!out)return;let b=$("chkBox");if(!
 try{GD["Orange lines and ⚠ — check before submitting"]=`<p><b style="color:#e65100">Orange with ⚠</b>: a score / rule / classification that is still incomplete (variables not documented or results pending — e.g. qSOFA, San Francisco Syncope Rule, PERC), or an investigation named in the note that you did not dictate (e.g. D-dimer, CT pulmonary angiogram). A box under the note lists each one and why. ⚠ is also put beside any text that is not in one of the note colours.</p>`}catch(e){}
 /* Claude: never name an investigation, result or score input that is not in the dictation */
 if(typeof qaiPrompt==="function"){const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n","RULES\n0n. NEVER write an investigation, a result or a value that is not in the shorthand (e.g. do not write D-dimer, CT pulmonary angiogram, troponin, X-ray, blood results unless dictated). A negated symptom (\"no X or Y\") is absent — do not start a work-up for it. A decision score whose inputs are not dictated is written as incomplete, naming what is missing.\n")}}
+/* p278_data — Notifiable diseases (Saudi MOH list 2023: "Immediately" or "Within 72 hours", reported through HESN by the attending physician).
+ Fields: n name · cat "I" (immediately) / "72" (within 72 h) · iso hospital precautions · dur how long · home advice when sent home · tx patient treatment (ED / initial) · ask contact-tracing questions · pep contacts: prophylaxis / vaccine · vul pregnant, infants, immunocompromised contacts · prev prevention / exclusion · cs one-line contact advice for the note.
+ Doses: standard references (Saudi MOH, CDC, UKHSA, WHO) — always confirm with infectious diseases / infection control and the local formulary. */
+const ND=[
+{id:"mers",n:"MERS-CoV (Middle East respiratory syndrome)",cat:"I",
+ iso:"single room in a segregated area; contact + droplet precautions (gown, gloves, eye protection, surgical mask); critically ill or aerosol-generating procedures → airborne precautions (negative-pressure room, fit-tested N95); avoid BiPAP; patient wears a surgical mask",
+ dur:"until cleared by infection control: one negative respiratory sample (ventilated: two negative lower respiratory samples 24 h apart); remains 'suspected' until symptoms resolve unless another cause is confirmed",
+ home:"home isolation in a separate room with a mask until infection control clears the patient",
+ tx:["Supportive care; no specific antiviral","Nasopharyngeal swab (and lower respiratory sample if intubated) for MERS-CoV rRT-PCR","Treat community-acquired pneumonia empirically while waiting"],
+ ask:["Camel contact or camel products (raw milk, meat, urine) in the 14 days before symptoms","Contact within 1.5 m with a confirmed MERS case","Visit to a health facility treating a MERS patient in the last 2 weeks","Household members, visitors, staff who examined the patient without PPE"],
+ pep:["No vaccine or drug prophylaxis","Household / community contacts: daily symptom monitoring for 14 days after the last exposure; swab if symptoms","Health workers with unprotected exposure ≤ 1.5 m: stop work, nasopharyngeal swab ≥ 24 h after exposure, return only after infection control clearance (14 days, ≥ 48 h without symptoms, ≥ 1 negative PCR)","Patients who shared a room ≥ 30 min: swab and 14-day monitoring"],
+ vul:["Immunocompromised and chronic-disease contacts: consider testing even without symptoms"],
+ prev:["Avoid contact with camels and raw camel products","Hand hygiene, masks, visual triage at the ED entrance"],
+ cs:"close contacts (household, visitors, staff without PPE, camel contact) were identified and advised daily symptom monitoring for 14 days with a swab if symptoms appear"},
+{id:"measles",n:"Measles (fever and rash illness)",cat:"I",
+ iso:"airborne precautions — negative-pressure single room, door closed, fit-tested N95 for staff; only immune staff to care for the patient",
+ dur:"until 4 days after the rash appeared (immunocompromised: for the whole illness)",
+ home:"stay at home, away from school / work and away from pregnant women, infants and immunocompromised people, until 4 days after the rash appeared",
+ tx:["Supportive care (fluids, paracetamol)","Vitamin A, once daily for 2 days: ≥ 12 months 200,000 IU; 6–11 months 100,000 IU; < 6 months 50,000 IU","Measles IgM serology + throat / nasopharyngeal swab and urine for PCR","Watch for pneumonia, encephalitis, dehydration"],
+ ask:["Household members and visitors — vaccination status (2 MMR doses?)","Pregnant contacts, infants < 12 months, immunocompromised contacts","School / nursery / workplace contacts","Who shared the ED waiting area (up to 2 h after the patient left)"],
+ pep:["Non-immune contacts ≥ 6 months: MMR vaccine within 72 h of exposure","Immunoglobulin within 6 days: IM normal immunoglobulin 0.5 mL/kg (max 15 mL) for infants < 12 months; IVIG 400 mg/kg for pregnant non-immune women and immunocompromised contacts","Non-immune health workers: off work from day 5 to day 21 after exposure"],
+ vul:["Pregnant: check measles IgG urgently; if non-immune → IVIG 400 mg/kg within 6 days; MMR is NOT given in pregnancy","Infants < 6 months: immunoglobulin","Immunocompromised: IVIG regardless of vaccination history"],
+ prev:["Exclude from school / nursery until 4 days after rash onset","Catch-up MMR for the household"],
+ cs:"close contacts (household, school / work, waiting area) were asked about; non-immune contacts advised MMR within 72 h; pregnant, infant and immunocompromised contacts referred for immunoglobulin within 6 days"},
+{id:"rubella",n:"Rubella (German measles)",cat:"I",
+ iso:"droplet precautions, single room; keep away from pregnant staff and patients",
+ dur:"until 7 days after the rash appeared (congenital rubella: contact precautions until 1 year of age unless cultures negative)",
+ home:"stay at home and away from pregnant women until 7 days after the rash appeared",
+ tx:["Supportive care","Rubella IgM serology ± throat swab PCR"],
+ ask:["Pregnant contacts (household, work, waiting area) and their rubella immunity","School / workplace contacts"],
+ pep:["Non-immune non-pregnant contacts: MMR vaccine (may not prevent this infection but protects later)","No routine immunoglobulin"],
+ vul:["Pregnant contact: urgent rubella IgG / IgM and same-day obstetric referral (risk of congenital rubella syndrome, highest < 16 weeks); MMR is NOT given in pregnancy"],
+ prev:["Exclude from school / work for 7 days after rash onset"],
+ cs:"pregnant contacts were asked about and advised urgent rubella serology with obstetric review; non-immune contacts advised MMR"},
+{id:"varicella",n:"Varicella (chickenpox)",cat:"72",
+ iso:"airborne + contact precautions (negative-pressure room, N95, gown and gloves); only immune staff",
+ dur:"until all lesions are dry and crusted (usually 5–7 days after rash onset)",
+ home:"stay at home, away from school / work, pregnant women, newborns and immunocompromised people until all spots are crusted",
+ tx:["Adults / adolescents / complicated cases within 24 h of rash: aciclovir 800 mg PO five times daily for 7 days (child ≥ 2 y: 20 mg/kg four times daily, max 800 mg)","Pregnant, immunocompromised, pneumonia, encephalitis: aciclovir 10 mg/kg IV every 8 h","Avoid NSAIDs (necrotising skin infection) and aspirin in children (Reye)","Paracetamol, calamine / antihistamine for itch"],
+ ask:["Household and face-to-face contacts (≥ 15 min same room)","Pregnant contacts, newborns, immunocompromised contacts — chickenpox history / VZV IgG"],
+ pep:["Non-immune healthy contacts ≥ 12 months: varicella vaccine within 3–5 days of exposure","Non-immune health workers: off work day 8 to day 21 (28 if VZIG given)"],
+ vul:["Pregnant non-immune (VZV IgG negative): VZIG within 10 days of exposure, or oral aciclovir 800 mg four times daily from day 7 to day 14 after exposure (local policy); review urgently if rash appears","Newborns (mother's rash 7 days before to 7 days after delivery) and immunocompromised: VZIG ± aciclovir"],
+ prev:["Exclude from school until all lesions crusted"],
+ cs:"pregnant, newborn and immunocompromised contacts were asked about and referred for VZV IgG / VZIG (or aciclovir); non-immune healthy contacts advised varicella vaccine within 3–5 days"},
+{id:"zoster",n:"Herpes zoster (shingles)",cat:"72",
+ iso:"localised in an immunocompetent patient: standard + contact precautions, lesions covered; disseminated or immunocompromised: airborne + contact precautions",
+ dur:"until all lesions are crusted",
+ home:"keep the rash covered; avoid contact with pregnant women without chickenpox immunity, newborns and immunocompromised people until crusted",
+ tx:["Within 72 h of rash (or eye / immunocompromised / > 50 y): aciclovir 800 mg PO five times daily for 7 days (or valaciclovir 1 g three times daily for 7 days)","Ophthalmic zoster: same day ophthalmology","Analgesia"],
+ ask:["Contacts with no chickenpox history: pregnant, newborns, immunocompromised"],
+ pep:["Non-immune exposed contacts can get chickenpox — same advice as varicella exposure"],
+ vul:["Pregnant non-immune contact of uncovered or disseminated zoster: VZV IgG and VZIG / aciclovir per varicella exposure advice"],
+ prev:["Cover lesions; hand hygiene"],
+ cs:"non-immune pregnant, newborn and immunocompromised contacts were asked about and advised to seek VZV immunity testing"},
+{id:"mening",n:"Invasive meningococcal disease / meningococcal meningitis",cat:"I",
+ iso:"droplet precautions, single room (surgical mask within 1 m)",
+ dur:"until 24 hours of effective antibiotics",home:"",
+ tx:["Ceftriaxone 2 g IV every 12 h (child 80–100 mg/kg, max 4 g/day) — give immediately, do not wait for LP","Dexamethasone 10 mg IV every 6 h (child 0.15 mg/kg) with / before the first antibiotic if meningitis (not in septicaemia alone)","Blood cultures and meningococcal PCR (blood / CSF)","Sepsis resuscitation"],
+ ask:["Household members and anyone who slept in the same house in the 7 days before illness","Kissing / intimate contacts in the last 7 days","Staff who did mouth-to-mouth or airway suction / intubation without a mask"],
+ pep:["Ciprofloxacin single oral dose: ≥ 12 y 500 mg; 5–11 y 250 mg; 1 month–4 y 125 mg (30 mg/kg max 125 mg)","or Rifampicin twice daily for 2 days: adult 600 mg; child 10 mg/kg (max 600 mg); < 1 month 5 mg/kg","Pregnant: ceftriaxone 250 mg IM single dose (or ciprofloxacin single dose)","MenACWY vaccine for household contacts once the serogroup is vaccine-preventable","Give within 24 h of diagnosis; not needed for routine staff or casual contacts"],
+ vul:["Pregnant: ceftriaxone 250 mg IM single dose","Children < 15 y IM option: ceftriaxone 125 mg single dose"],
+ prev:["Inform public health immediately so contacts are traced the same day"],
+ cs:"household and kissing contacts of the last 7 days were identified and advised single-dose ciprofloxacin (500 mg adult; pregnant: ceftriaxone 250 mg IM) within 24 h, with MenACWY vaccine per public health"},
+{id:"meningo",n:"Meningitis (other — bacterial or viral)",cat:"I",
+ iso:"droplet precautions until meningococcal disease is excluded",dur:"until 24 h of effective antibiotics or until a non-meningococcal cause is confirmed",home:"",
+ tx:["Ceftriaxone 2 g IV every 12 h (child 80–100 mg/kg/day); add ampicillin 2 g IV every 4 h if > 50 y / immunocompromised / pregnant (Listeria); add aciclovir 10 mg/kg IV every 8 h if encephalitis suspected","Dexamethasone 10 mg IV every 6 h with / before the first antibiotic (bacterial)","Blood cultures; LP when safe"],
+ ask:["Household / kissing contacts (if meningococcal or Hib is possible)"],
+ pep:["Contact prophylaxis only if meningococcal or Hib is confirmed / strongly suspected — see those entries"],vul:[],prev:[],
+ cs:"household contacts were noted; prophylaxis to follow if meningococcal or Hib disease is confirmed"},
+{id:"hib",n:"Haemophilus influenzae type b (invasive)",cat:"I",
+ iso:"droplet precautions",dur:"until 24 h of effective antibiotics",home:"",
+ tx:["Ceftriaxone 2 g IV daily–12-hourly (child 80–100 mg/kg/day)","Dexamethasone for meningitis (as for bacterial meningitis)"],
+ ask:["Household contacts — any child < 4 years not fully vaccinated, or immunocompromised member","Nursery contacts"],
+ pep:["Rifampicin 20 mg/kg once daily for 4 days (max 600 mg; < 1 month 10 mg/kg) to ALL household members when the household has a child < 4 y not fully vaccinated or an immunocompromised member","Complete Hib vaccination for unvaccinated children"],
+ vul:["Pregnant household contact: discuss with ID (ceftriaxone alternative)"],prev:[],
+ cs:"household contacts were asked about (children < 4 y not fully vaccinated, immunocompromised) and advised rifampicin 20 mg/kg (max 600 mg) daily for 4 days per public health"},
+{id:"tb",n:"Tuberculosis (pulmonary)",cat:"72",
+ iso:"airborne precautions — negative-pressure room, fit-tested N95 for staff, surgical mask on the patient when outside the room",
+ dur:"until 3 sputum smears are negative (8–24 h apart, one early morning) or ≥ 2 weeks of effective treatment with clinical improvement",
+ home:"if sent home: stay at home, no visitors, sleep in a separate room, mask when with others, until the TB team clears",
+ tx:["Three sputum samples for AFB smear, GeneXpert / NAAT and culture; chest X-ray","HIV test","Do not start empirical anti-TB therapy in the ED unless directed by the TB / ID team (standard: rifampicin, isoniazid, pyrazinamide, ethambutol + pyridoxine)"],
+ ask:["Household and close contacts (≥ 8 h in the same room)","Children < 5 y, immunocompromised, people with HIV / diabetes / on biologics","Workplace / dormitory contacts"],
+ pep:["Contact screening by the TB team: symptoms, TST or IGRA, chest X-ray","Children < 5 y and immunocompromised contacts: window prophylaxis (isoniazid) after TB is excluded, per TB team"],
+ vul:["Pregnant contacts: screening as above; isoniazid preventive therapy per TB team"],
+ prev:["Directly observed treatment through the TB programme"],
+ cs:"household and close contacts (especially children < 5 y and immunocompromised) were asked about and referred for TB contact screening (TST / IGRA, chest X-ray)"},
+{id:"tbx",n:"Tuberculosis (extrapulmonary)",cat:"72",
+ iso:"standard precautions (airborne if pulmonary involvement not yet excluded or draining lesions with aerosol)",dur:"until pulmonary TB is excluded",home:"",
+ tx:["Chest X-ray and sputum to exclude pulmonary TB","Tissue / fluid for AFB, NAAT, culture; HIV test","Refer TB / ID team"],
+ ask:["Household contacts (screen for a source case)"],pep:["Contact screening for a source case per TB team"],vul:[],prev:[],
+ cs:"household contacts were noted for screening by the TB team"},
+{id:"pertussis",n:"Pertussis (whooping cough)",cat:"I",
+ iso:"droplet precautions, single room",dur:"until 5 days of effective antibiotics (untreated: 21 days from cough onset)",
+ home:"stay at home, away from infants and pregnant women, until 5 days of antibiotics are completed",
+ tx:["Azithromycin 500 mg day 1 then 250 mg days 2–5 (child 10 mg/kg day 1, max 500 mg, then 5 mg/kg days 2–5; < 1 month: 10 mg/kg daily for 5 days)","Alternative: clarithromycin or co-trimoxazole (not < 2 months)","Nasopharyngeal swab PCR (cough < 3 weeks) or serology","Infants < 6 months: admit (apnoea risk)"],
+ ask:["Household contacts — infants < 1 year, pregnant women (≥ 32 weeks), unvaccinated children","Health workers caring for infants or pregnant women"],
+ pep:["Antibiotic prophylaxis (same azithromycin regimen) to household contacts within 21 days of the case's cough onset when the household includes a vulnerable person","Unvaccinated / incompletely vaccinated children: catch-up DTaP"],
+ vul:["Pregnant contact (≥ 32 weeks): azithromycin prophylaxis + Tdap vaccine (Tdap recommended in every pregnancy, 16–32 weeks)","Infants < 1 year: azithromycin 10 mg/kg daily for 5 days"],
+ prev:["Exclude from school / nursery until 5 days of antibiotics completed"],
+ cs:"household contacts (infants, pregnant women, unvaccinated children) were asked about and advised azithromycin prophylaxis within 21 days of cough onset; pregnant contacts advised Tdap"},
+{id:"diph",n:"Diphtheria",cat:"I",
+ iso:"respiratory: droplet precautions; cutaneous: contact precautions; single room",dur:"until 2 negative cultures (nose and throat / skin) taken ≥ 24 h apart after finishing antibiotics",home:"",
+ tx:["Diphtheria antitoxin (DAT) as soon as suspected — through the MOH / ID team; do not wait for culture","Erythromycin 500 mg IV / PO four times daily or benzylpenicillin 1.2 g IV every 6 h, for 14 days","Airway assessment (pseudomembrane); ECG (myocarditis)","Nose and throat swabs for culture and toxin testing"],
+ ask:["Household and kissing contacts, health workers exposed to secretions","Vaccination status of contacts"],
+ pep:["Nose and throat cultures for all close contacts","Erythromycin 500 mg PO four times daily for 7–10 days (child 12.5 mg/kg) or benzathine penicillin G 1.2 MU IM single dose (< 6 y: 600,000 U)","Diphtheria-toxoid booster (Td / DTaP) if not vaccinated in the last 5 years","Exclude contacts who are food handlers / health workers / teachers until cultures are negative"],
+ vul:["Pregnant: erythromycin or penicillin acceptable; Td booster"],prev:[],
+ cs:"close contacts were identified and advised nose / throat cultures, erythromycin or benzathine penicillin prophylaxis and a diphtheria toxoid booster"},
+{id:"mumps",n:"Mumps",cat:"I",
+ iso:"droplet precautions",dur:"until 5 days after the parotid swelling started",
+ home:"stay at home, away from school / work, until 5 days after the swelling started",
+ tx:["Supportive care, analgesia","Buccal swab PCR / mumps IgM","Watch for orchitis, meningitis, pancreatitis"],
+ ask:["Household and school / work contacts, vaccination status"],
+ pep:["MMR for non-immune contacts (does not reliably prevent this infection but protects later)","Non-immune health workers: off work day 12 to day 25 after exposure"],
+ vul:["Pregnant non-immune contact: no specific prophylaxis; MMR not given in pregnancy"],prev:["Exclude from school for 5 days after swelling onset"],
+ cs:"household and school contacts were asked about vaccination; non-immune contacts advised MMR"},
+{id:"hepa",n:"Hepatitis A (acute)",cat:"I",
+ iso:"contact (enteric) precautions; single room with own toilet if incontinent / child",dur:"for 1 week after jaundice onset (or 2 weeks after symptom onset if no jaundice)",
+ home:"strict hand washing; stay off work / school for 7 days after jaundice started; food handlers off until cleared",
+ tx:["Supportive care; avoid paracetamol excess and alcohol","LFTs, INR, HAV IgM","Admit if INR raised, encephalopathy, unable to drink"],
+ ask:["Household and sexual contacts, food handlers, nursery contacts","Shared food source (restaurant, catering)"],
+ pep:["Within 14 days of exposure: hepatitis A vaccine for contacts ≥ 1 year","Normal human immunoglobulin (0.1 mL/kg IM) in addition / instead for contacts < 1 year, immunocompromised, chronic liver disease (and adults > 40–60 y per local policy)"],
+ vul:["Pregnant contacts: hepatitis A vaccine and / or immunoglobulin are safe"],
+ prev:["Food handlers excluded until 7 days after jaundice onset","Hand hygiene; disinfect toilets"],
+ cs:"household, sexual and food contacts were asked about and advised hepatitis A vaccine within 14 days (immunoglobulin for infants, immunocompromised and chronic liver disease)"},
+{id:"hepb",n:"Hepatitis B (newly diagnosed)",cat:"72",
+ iso:"standard precautions",dur:"",home:"",
+ tx:["HBsAg, anti-HBc IgM, HBeAg, HBV DNA, LFTs, INR; HIV / HCV tests","Refer hepatology / ID"],
+ ask:["Sexual partners, household members, children of the patient; needle sharing"],
+ pep:["Non-immune sexual / household / needle contacts: hepatitis B vaccine course; HBIG within 48 h (up to 7 days; sexual up to 14 days) for recent significant exposure","Test contacts (HBsAg, anti-HBs, anti-HBc)"],
+ vul:["Pregnant contact: vaccine and HBIG are safe","Newborn of HBsAg-positive mother: HBIG + vaccine within 12 h of birth"],prev:["Safe sex, no sharing razors / toothbrushes"],
+ cs:"sexual and household contacts were asked about and advised hepatitis B testing and vaccination (HBIG for recent significant exposure)"},
+{id:"hepc",n:"Hepatitis C (newly diagnosed)",cat:"72",iso:"standard precautions",dur:"",home:"",
+ tx:["Anti-HCV, HCV RNA, LFTs; HIV / HBV tests","Refer hepatology / ID (curable with direct-acting antivirals)"],
+ ask:["Needle-sharing and sexual partners"],pep:["No post-exposure prophylaxis; test exposed contacts"],vul:[],prev:["No sharing needles / razors"],
+ cs:"needle-sharing and sexual contacts were advised hepatitis C testing"},
+{id:"hepe",n:"Hepatitis E / hepatitis D / viral hepatitis (unspecified)",cat:"72",iso:"contact (enteric) precautions for hepatitis E; standard for D",dur:"hepatitis E: 2 weeks after symptom onset",home:"hand hygiene; boiled / safe water",
+ tx:["Supportive; LFTs, INR","Hepatitis E is dangerous in pregnancy (fulminant hepatitis) — admit pregnant patients"],ask:["Shared water / food source; household contacts"],pep:["No vaccine available locally; hygiene"],vul:["Pregnant contacts with symptoms: urgent review"],prev:["Safe water"],
+ cs:"household contacts sharing the same water / food were advised hygiene and review if symptoms"},
+{id:"hiv",n:"HIV infection (newly diagnosed)",cat:"I",iso:"standard precautions",dur:"",home:"",
+ tx:["Confirmatory testing per lab algorithm; CD4, viral load","Refer HIV / ID clinic for antiretroviral therapy","Screen for TB, hepatitis B / C, syphilis"],
+ ask:["Sexual partners, needle-sharing partners, children (if mother positive)"],
+ pep:["Any partner exposed in the last 72 h: post-exposure prophylaxis — tenofovir / emtricitabine + dolutegravir for 28 days (ID team)","Partner notification and testing through the HIV programme (confidential)"],
+ vul:["Pregnant partner: urgent HIV test and ID / obstetric review (prevention of mother-to-child transmission)"],prev:["Confidentiality — disclose only to those directly involved in care"],
+ cs:"sexual / needle-sharing partners were noted for confidential partner notification and testing; anyone exposed within 72 h advised PEP"},
+{id:"flu",n:"Influenza (laboratory-confirmed, hospitalised)",cat:"I",
+ iso:"droplet precautions, single room or cohort",dur:"for 7 days from symptom onset or until 24 h after the fever settles (longer if immunocompromised)",home:"",
+ tx:["Oseltamivir 75 mg PO twice daily for 5 days (child: ≤ 15 kg 30 mg; 15–23 kg 45 mg; 23–40 kg 60 mg; > 40 kg 75 mg — all twice daily; < 1 y 3 mg/kg twice daily)","Start as early as possible; do not wait for the result in hospitalised patients"],
+ ask:["Household contacts at high risk: pregnant, < 5 y, ≥ 65 y, chronic disease, immunocompromised"],
+ pep:["High-risk contacts within 48 h of exposure: oseltamivir 75 mg once daily for 10 days (child: weight-band dose once daily)","Annual influenza vaccine for the household"],
+ vul:["Pregnant contacts: oseltamivir prophylaxis and influenza vaccine are recommended"],prev:["Annual vaccination; hand hygiene"],
+ cs:"high-risk household contacts (pregnant, young children, elderly, chronic disease) were asked about and advised oseltamivir prophylaxis within 48 h and influenza vaccination"},
+{id:"avian",n:"Avian influenza / novel influenza",cat:"I",
+ iso:"airborne + contact precautions with eye protection, negative-pressure room",dur:"until cleared by infection control / public health",home:"",
+ tx:["Oseltamivir 75 mg PO twice daily (treatment dose; duration per ID)","Respiratory samples to the reference lab through public health"],
+ ask:["Contact with sick / dead poultry or birds, live-bird markets, travel","Household and health-worker contacts"],
+ pep:["Exposed contacts: oseltamivir 75 mg twice daily (per public health); fever / symptom monitoring for 10 days"],vul:["Pregnant contacts: oseltamivir"],prev:[],
+ cs:"bird / poultry exposure and close contacts were identified and referred to public health for oseltamivir prophylaxis and 10-day monitoring"},
+{id:"covid",n:"COVID-19 (laboratory-confirmed, hospitalised)",cat:"I",
+ iso:"droplet + contact precautions (airborne / N95 for aerosol-generating procedures)",dur:"per current PHA guidance (about 5–10 days from symptom onset; longer if severe or immunocompromised)",home:"",
+ tx:["Supportive care; oxygen to SpO2 ≥ 92–96%","Dexamethasone 6 mg daily for 10 days if needing oxygen","Antivirals / immunomodulators per current PHA guidance"],
+ ask:["Household high-risk contacts"],pep:["No routine prophylaxis; symptom monitoring and testing if symptoms"],vul:["Pregnant / immunocompromised contacts: test early if symptoms"],prev:["Vaccination per PHA"],
+ cs:"high-risk household contacts were advised symptom monitoring and early testing"},
+{id:"rsv",n:"RSV (laboratory-confirmed, hospitalised)",cat:"I",iso:"contact + droplet precautions, cohort",dur:"for the duration of the illness",home:"",
+ tx:["Supportive care: oxygen, fluids / feeds, suction"],ask:["Infant and immunocompromised contacts"],pep:["No routine prophylaxis; hand hygiene"],vul:["High-risk infants: nirsevimab / palivizumab per paediatric policy"],prev:["Hand hygiene; keep sick siblings away from infants"],
+ cs:"infant and immunocompromised contacts were advised hand hygiene and early review if symptoms"},
+{id:"brucella",n:"Brucellosis",cat:"72",
+ iso:"standard precautions (no person-to-person spread); warn the lab (culture is a lab hazard)",dur:"",home:"",
+ tx:["Doxycycline 100 mg PO twice daily for 6 weeks + rifampicin 600–900 mg PO once daily for 6 weeks (or + gentamicin 5 mg/kg IV daily for 7 days)","Pregnant: rifampicin ± co-trimoxazole (avoid doxycycline; co-trimoxazole not near term) — ID","Children < 8 y: co-trimoxazole + rifampicin","Blood cultures (tell the lab), Brucella serology"],
+ ask:["Raw (unpasteurised) milk, laban, cheese; contact with sheep, goats, camels (births, slaughter)","Family members with the same source"],
+ pep:["No contact prophylaxis; family members with the same exposure and symptoms → serology","Lab staff exposed to cultures: doxycycline + rifampicin for 3 weeks"],vul:[],prev:["Boil / pasteurise milk; gloves with animal births"],
+ cs:"family members sharing the same food / animal source were asked about and advised Brucella testing if symptomatic; advised to boil milk"},
+{id:"typhoid",n:"Typhoid / paratyphoid (enteric fever)",cat:"72",
+ iso:"contact (enteric) precautions",dur:"for the duration of the illness / until stool cultures negative",home:"strict hand washing; no food preparation for others until cleared",
+ tx:["Blood cultures before antibiotics","Uncomplicated: azithromycin 1 g day 1 then 500 mg daily for 7 days (child 10–20 mg/kg daily, max 1 g)","Severe / unable to take orally: ceftriaxone 2 g IV daily (child 80 mg/kg) — carbapenem if XDR typhoid (travel to Pakistan)"],
+ ask:["Travel, food / water source, household members, food handlers in the household"],
+ pep:["No prophylaxis; stool cultures for household contacts who are food handlers / health workers / have symptoms","Typhoid vaccine for future travel"],vul:[],prev:["Food handlers excluded until 3 negative stool cultures (≥ 48 h apart, ≥ 48 h after antibiotics)"],
+ cs:"household contacts and food handlers were identified and advised stool cultures; food handlers off work until cleared"},
+{id:"cholera",n:"Cholera",cat:"I",iso:"contact (enteric) precautions",dur:"for the duration of diarrhoea",home:"",
+ tx:["Aggressive rehydration: ORS; severe — Ringer's lactate 100 mL/kg over 3 h (6 h in infants)","Doxycycline 300 mg PO single dose (adults); pregnant and children: azithromycin single dose (1 g; child 20 mg/kg)","Stool culture for Vibrio cholerae"],
+ ask:["Shared water / food source, travel, household cases"],pep:["No routine prophylaxis; safe water and hand hygiene for the household; review if diarrhoea"],vul:[],prev:["Boil / chlorinate water; safe food"],
+ cs:"household members sharing the same water / food were advised safe water, hand hygiene and early review if diarrhoea"},
+{id:"food",n:"Foodborne / waterborne outbreak (≥ 2 related cases) or notifiable food-poisoning organism",cat:"I",
+ iso:"contact (enteric) precautions",dur:"until 48 h after the last diarrhoea / vomiting",home:"stay off work / school until 48 h after the last diarrhoea or vomiting; strict hand washing",
+ tx:["Rehydration (ORS / IV)","Stool culture / PCR (Salmonella, Shigella, Campylobacter, E. coli incl. STEC, norovirus)","Avoid antimotility drugs and antibiotics if bloody diarrhoea / STEC possible (HUS risk); check FBC, U&E if bloody"],
+ ask:["Who else ate the same food — where (restaurant, event, home), when, what was eaten","Number ill, onset times, food handlers involved"],
+ pep:["No prophylaxis; those who ate the same food and have symptoms → review / stool sample","Keep leftover food for the inspector if available"],
+ vul:["Pregnant contacts (Listeria risk from soft cheese / deli food), young children and elderly: early review"],
+ prev:["Food handlers, health workers and children < 5 y excluded until 48 h symptom-free (STEC / typhoid: until negative stools)"],
+ cs:"others who ate the same food were identified (place, time, food) and advised stool sample / review if symptoms; food handlers off work until 48 h symptom-free"},
+{id:"dengue",n:"Dengue",cat:"72",iso:"standard precautions (no person-to-person spread); mosquito-proof room / net",dur:"",home:"use a mosquito net / repellent at home for the first week (prevents spread to family through mosquitoes)",
+ tx:["Paracetamol only — NO NSAIDs / aspirin","Fluids; FBC (platelets, haematocrit) daily during the critical phase (days 3–7)","Warning signs → admit: abdominal pain, persistent vomiting, bleeding, lethargy, rising haematocrit with falling platelets","NS1 antigen (≤ day 5) / dengue IgM"],
+ ask:["Residence / travel (Jeddah, Makkah, Jazan, Madinah), others at home with fever"],pep:["No prophylaxis; family members with fever → test"],vul:["Pregnant: admit / close review"],prev:["Remove standing water; vector control by public health"],
+ cs:"household members with fever were advised testing; mosquito-bite prevention advised"},
+{id:"malaria",n:"Malaria",cat:"I",iso:"standard precautions",dur:"",home:"",
+ tx:["Thick and thin films ×3 (12–24 h apart) / rapid test","Severe or P. falciparum with danger signs: artesunate 2.4 mg/kg IV at 0, 12, 24 h then daily","Uncomplicated falciparum: artemether-lumefantrine (6 doses over 3 days) with food","Vivax / ovale: chloroquine then primaquine after G6PD test (ID)","Glucose monitoring"],
+ ask:["Travel to endemic area (Jazan / Asir border, Africa, South Asia), fellow travellers with fever"],pep:["No contact prophylaxis; fellow travellers with fever → urgent malaria test"],vul:["Pregnant: severe malaria risk — admit, artesunate"],prev:["Vector control by public health"],
+ cs:"fellow travellers were advised urgent malaria testing if fever"},
+{id:"vhf",n:"Viral haemorrhagic fever (CCHF / Alkhurma / Ebola / Marburg / Lassa / Rift Valley)",cat:"I",
+ iso:"strict isolation: single room (negative-pressure for aerosol-generating procedures), contact + droplet precautions with full PPE (gown, double gloves, face shield, N95), minimal staff, dedicated equipment; inform the lab before sending samples",
+ dur:"until cleared by infection control / public health",home:"",
+ tx:["Supportive care, blood products as needed","CCHF: ribavirin per ID (most useful early)","Samples only after discussion with public health / reference lab"],
+ ask:["Tick bite, animal slaughter (Eid), livestock work, travel (Africa), contact with a sick person's blood / fluids","Staff with needlestick / mucosal exposure"],
+ pep:["Contacts: temperature twice daily for 14 days (21 days for Ebola / Marburg) from the last exposure","Health workers with needlestick from CCHF: ribavirin prophylaxis per ID"],vul:[],prev:["Tick avoidance; gloves at slaughter"],
+ cs:"close and staff contacts were identified and advised twice-daily temperature monitoring for 14 days (21 for Ebola / Marburg) through public health"},
+{id:"bite",n:"Animal bite / sting (rabies risk)",cat:"72",iso:"standard precautions",dur:"",home:"",
+ tx:["Wash the wound with soap and running water for 15 minutes, then antiseptic","Rabies vaccine (days 0, 3, 7, 14 — or per MOH schedule) and rabies immunoglobulin into / around the wound for category III exposure (unvaccinated)","Tetanus booster as needed; co-amoxiclav for high-risk bites","Snake / scorpion: antivenom per protocol"],
+ ask:["Type of animal, provoked or not, can the animal be observed for 10 days (dog / cat), vaccination of the animal","Others bitten by the same animal"],
+ pep:["Others bitten / scratched by the same animal: same wound care and rabies post-exposure prophylaxis","Notify so the animal can be traced / observed"],vul:["Pregnancy is NOT a contraindication to rabies vaccine or immunoglobulin"],prev:[],
+ cs:"others exposed to the same animal were asked about and advised wound care and rabies post-exposure prophylaxis"},
+{id:"rabies",n:"Rabies (clinical)",cat:"I",iso:"standard + contact precautions (saliva), single room",dur:"for the duration of the illness",home:"",
+ tx:["Supportive / palliative care in ICU; ID consult"],ask:["Animal exposure; family / staff exposed to saliva (bites, mucous membranes)"],
+ pep:["Contacts with saliva exposure to mucosa / broken skin: rabies post-exposure prophylaxis"],vul:[],prev:[],
+ cs:"family and staff with saliva exposure were identified and advised rabies post-exposure prophylaxis"},
+{id:"scabies",n:"Scabies",cat:"72",iso:"contact precautions (gown and gloves)",dur:"until 24 h after the first treatment",home:"avoid close skin contact and sharing bedding / towels until 24 h after the first treatment; may return to school / work after the first treatment",
+ tx:["Permethrin 5% cream to the whole body from the neck down (include scalp / face in infants and elderly), wash off after 8–14 h, repeat after 7 days","or ivermectin 200 mcg/kg PO, repeat after 7–14 days (not < 15 kg or in pregnancy)","Antihistamine for itch (itch can last 2–4 weeks)"],
+ ask:["Household members and close / sexual contacts (in the last month)","Institutional contacts (dormitory, care home, school)"],
+ pep:["Treat ALL household and close contacts at the same time, even without itch","Wash bedding / clothes at ≥ 60 °C or seal in a bag for 72 h"],vul:["Pregnant / breastfeeding / infants: permethrin is safe; no ivermectin"],prev:["Return to school / work after the first treatment"],
+ cs:"household and close contacts were asked about and advised simultaneous treatment (permethrin 5%) and hot washing of bedding / clothes"},
+{id:"tetanus",n:"Tetanus (clinical)",cat:"I",iso:"standard precautions; quiet dark room (spasms)",dur:"",home:"",
+ tx:["Human tetanus immunoglobulin IM (500 IU per CDC; higher doses per local protocol) + start tetanus toxoid course","Metronidazole 500 mg IV every 8 h for 7–10 days","Wound debridement; benzodiazepines for spasms; early airway / ICU"],
+ ask:["Others with the same wound source (e.g. neonates, injection drug use)"],pep:["No contact prophylaxis (not contagious)"],vul:[],prev:["Complete vaccination after recovery (disease does not give immunity)"],
+ cs:"not contagious — no contact prophylaxis"},
+{id:"botulism",n:"Botulism",cat:"I",iso:"standard precautions",dur:"",home:"",
+ tx:["Botulinum antitoxin as soon as suspected — through MOH / ID","Airway / ventilation monitoring (vital capacity)"],
+ ask:["Who else ate the same food (home-canned / preserved food, honey in infants)"],pep:["Others who ate the same food: urgent review; antitoxin if symptoms"],vul:[],prev:["Keep the suspected food for testing"],
+ cs:"others who ate the same food were identified and advised urgent review if any weakness, blurred vision or swallowing difficulty"},
+{id:"afp",n:"Acute flaccid paralysis / poliomyelitis",cat:"I",iso:"contact + droplet precautions",dur:"until polio is excluded",home:"",
+ tx:["Two stool samples ≥ 24 h apart within 14 days of paralysis onset (for poliovirus)","Neurology; respiratory monitoring"],ask:["Vaccination status, travel, household children"],pep:["Polio vaccine for unvaccinated household contacts (per public health)"],vul:[],prev:[],
+ cs:"household contacts' polio vaccination status was asked about; public health to advise vaccination"},
+{id:"mpox",n:"Mpox (monkeypox)",cat:"I",iso:"contact + droplet precautions (N95 if available), single room",dur:"until all lesions have crusted, scabs fallen off and new skin formed (usually 2–4 weeks)",
+ home:"isolate at home; cover lesions; no sexual contact; separate towels / bedding until all lesions healed",
+ tx:["Lesion swab (roof / fluid) for PCR","Supportive care; tecovirimat for severe / immunocompromised (ID)","HIV / STI screen"],
+ ask:["Sexual partners and household contacts in the 21 days before symptoms","Shared bedding / towels"],
+ pep:["Contacts: monitor temperature and rash for 21 days","MVA-BN vaccine within 4 days of exposure (up to 14 days) for high-risk contacts, where available"],vul:["Pregnant, children, immunocompromised contacts: ID review"],prev:[],
+ cs:"sexual and household contacts were asked about and advised 21-day symptom monitoring and vaccine where available"},
+{id:"leish",n:"Leishmaniasis (cutaneous / visceral)",cat:"72",iso:"standard precautions",dur:"",home:"",
+ tx:["Skin scraping / biopsy (cutaneous); bone marrow / serology (visceral)","Refer dermatology / ID for antimonial or amphotericin therapy"],ask:["Residence / travel, family members with similar lesions"],pep:["No prophylaxis; sandfly protection"],vul:[],prev:["Sandfly nets / repellent"],
+ cs:"family members with similar lesions were advised assessment"},
+{id:"legion",n:"Legionellosis",cat:"I",iso:"standard precautions (no person-to-person spread)",dur:"",home:"",
+ tx:["Levofloxacin 750 mg daily or azithromycin 500 mg daily (IV if severe)","Urine Legionella antigen; sputum culture"],ask:["Hotels, hospital stay, cooling towers, spa / hot tubs, travel in the last 14 days"],pep:["No prophylaxis; source investigation by public health"],vul:[],prev:[],
+ cs:"possible water source (hotel, travel, cooling tower) was noted for public health; no contact prophylaxis needed"},
+{id:"qfever",n:"Q fever (Coxiella)",cat:"72",iso:"standard precautions",dur:"",home:"",
+ tx:["Doxycycline 100 mg PO twice daily for 14 days","Serology; echocardiography if valve disease"],ask:["Animal births (sheep, goats, camels), farms, raw milk; others exposed"],pep:["No prophylaxis; exposed people with fever → serology"],vul:["Pregnant: co-trimoxazole (ID)"],prev:[],
+ cs:"others with the same animal exposure were advised review if fever"},
+{id:"sti",n:"Sexually transmitted infection (syphilis / gonorrhoea / chlamydia / trichomonas / chancroid / LGV / genital herpes / genital ulcer)",cat:"72",
+ iso:"standard precautions",dur:"",home:"no sexual contact until treatment is completed (and 7 days after single-dose treatment) and partners are treated",
+ tx:["Gonorrhoea: ceftriaxone 500 mg IM single dose (1 g if ≥ 150 kg)","Chlamydia: doxycycline 100 mg PO twice daily for 7 days (pregnant: azithromycin 1 g single dose)","Early syphilis (< 2 years): benzathine penicillin G 2.4 MU IM single dose; late / unknown: weekly × 3","Trichomonas: metronidazole 500 mg PO twice daily for 7 days (women) / 2 g single dose (men)","Chancroid: azithromycin 1 g PO single dose or ceftriaxone 250 mg IM","Genital herpes (first episode): aciclovir 400 mg PO three times daily for 7–10 days","Test for HIV, syphilis, hepatitis B / C"],
+ ask:["Sexual partners: last 60 days (gonorrhoea / chlamydia / trichomonas), 90 days–1 year (syphilis by stage)"],
+ pep:["Partners: test and treat with the same regimen (partner notification through the clinic, confidential)"],
+ vul:["Pregnant partner: urgent testing and obstetric review (congenital syphilis, neonatal conjunctivitis)"],prev:["Condoms; test of cure where indicated"],
+ cs:"sexual partners were asked about and advised confidential testing and treatment with the same regimen; no sexual contact until treated"},
+{id:"tss",n:"Toxic shock syndrome (streptococcal / staphylococcal)",cat:"I",iso:"droplet + contact precautions for invasive group A streptococcus",dur:"until 24 h of effective antibiotics",home:"",
+ tx:["Resuscitation; remove tampon / source","Clindamycin 900 mg IV every 8 h + ceftriaxone / benzylpenicillin (or vancomycin / flucloxacillin for staphylococcal); IVIG for streptococcal TSS (ID)","Surgical review for necrotising infection"],
+ ask:["Household contacts (invasive group A strep)"],pep:["Invasive GAS: antibiotic prophylaxis to close household contacts per public health (especially elderly, newborns, post-partum mothers, varicella in household)"],vul:["Post-partum mother / newborn in the household: prophylaxis"],prev:[],
+ cs:"household contacts were noted; public health to advise antibiotic prophylaxis for vulnerable contacts (newborns, elderly, post-partum)"},
+{id:"ipd",n:"Invasive pneumococcal disease",cat:"72",iso:"standard precautions",dur:"",home:"",tx:["Ceftriaxone ± vancomycin per site (meningitis doses)"],ask:[],pep:["No contact prophylaxis"],vul:[],prev:["Pneumococcal vaccination per schedule"],cs:"no contact prophylaxis needed"},
+{id:"listeria",n:"Listeriosis",cat:"72",iso:"standard precautions",dur:"",home:"",tx:["Ampicillin 2 g IV every 4 h + gentamicin (meningitis / bacteraemia); pregnant: obstetric review"],ask:["Soft cheese, deli meat, unpasteurised dairy; others who ate the same food — pregnant women"],pep:["No prophylaxis; pregnant women who ate the same food: review if fever"],vul:["Pregnant: high risk of miscarriage / neonatal sepsis — urgent review if fever"],prev:[],cs:"others (especially pregnant women) who ate the same food were advised review if fever"},
+{id:"ophneo",n:"Ophthalmia neonatorum",cat:"72",iso:"contact precautions",dur:"until 24 h of effective treatment",home:"",tx:["Gonococcal: ceftriaxone 25–50 mg/kg IV / IM single dose (max 125 mg)","Chlamydial: erythromycin 12.5 mg/kg PO four times daily for 14 days","Eye swabs for Gram stain, culture, NAAT"],ask:["Mother and her partner"],pep:["Test and treat the mother and partner"],vul:[],prev:[],cs:"the mother and partner were advised testing and treatment"},
+{id:"co",n:"Carbon monoxide poisoning",cat:"I",iso:"not infectious",dur:"",home:"do not return to the house until the heater / generator / ventilation is checked",
+ tx:["100% oxygen via non-rebreather (or intubation) until COHb < 3% and symptoms resolve","COHb level, ECG, troponin, lactate; pregnancy test","Hyperbaric referral: LOC, neurological signs, COHb > 25% (> 15% pregnant), cardiac ischaemia"],
+ ask:["Everyone else in the same house / room / car (including children and pets), the source (heater, charcoal, generator)"],
+ pep:["All others exposed: assess in the ED with COHb"],vul:["Pregnant: lower threshold for hyperbaric oxygen (fetal risk)"],prev:["Ventilation, CO alarm, no indoor charcoal / generators"],
+ cs:"everyone else exposed in the same place was asked about and advised to attend the ED for COHb testing; source to be made safe before returning"},
+{id:"etoh",n:"Alcohol intoxication (ethanol / methanol / other)",cat:"I",iso:"not infectious",dur:"",home:"",
+ tx:["Airway, glucose, thiamine 100 mg IV before glucose if malnourished","Methanol / toxic alcohol suspected: osmolar and anion gap, VBG; fomepizole (or ethanol) and haemodialysis per toxicology","Poison centre"],
+ ask:["Others who drank from the same source (methanol cluster)"],pep:["Others who drank the same drink: urgent ED assessment (methanol)"],vul:[],prev:[],
+ cs:"others who drank from the same source were advised urgent ED assessment"},
+{id:"lead",n:"Lead poisoning (blood lead > 5 µg/dL)",cat:"72",iso:"not infectious",dur:"",home:"",tx:["Blood lead, FBC (basophilic stippling); remove the source","Chelation per toxicology (level-dependent)"],ask:["Others in the house (children), source (kohl, traditional remedies, paint, occupation)"],pep:["Test other children / household members"],vul:["Pregnant household members: test"],prev:[],cs:"other household members (especially children and pregnant women) were advised blood lead testing"},
+{id:"bio",n:"Plague / anthrax / smallpox / suspected bioterrorism",cat:"I",
+ iso:"pneumonic plague: droplet precautions until 48 h of antibiotics; smallpox: airborne + contact; anthrax: standard (not person-to-person)",dur:"per infection control / public health",home:"",
+ tx:["Inform public health and the lab before sending samples","Plague: gentamicin or doxycycline / ciprofloxacin","Anthrax: ciprofloxacin-based combination per ID"],
+ ask:["Everyone exposed to the same source / patient"],pep:["Plague contacts: doxycycline 100 mg twice daily for 7 days; anthrax exposed: ciprofloxacin 500 mg twice daily (60 days) + vaccine; smallpox: vaccine within 4 days (public health)"],vul:[],prev:[],
+ cs:"all exposed people were identified for public health prophylaxis"},
+{id:"enteric",n:"Shigellosis / salmonellosis / campylobacter / STEC / giardiasis / cryptosporidiosis / norovirus",cat:"72",
+ iso:"contact (enteric) precautions",dur:"until 48 h after the last diarrhoea (STEC: until 2 negative stools)",home:"stay off work / school until 48 h after the last diarrhoea; strict hand washing; do not prepare food for others",
+ tx:["Rehydration","Stool culture / PCR","Shigella (moderate–severe): azithromycin 500 mg daily for 3 days","Avoid antibiotics / antimotility in STEC (HUS) — check FBC, U&E"],
+ ask:["Household members with diarrhoea, shared food, nursery / food-handler contacts"],pep:["No prophylaxis; symptomatic contacts → stool sample"],vul:["Young children and elderly contacts: early review if bloody diarrhoea"],prev:["Food handlers / health workers / children < 5 y excluded until 48 h symptom-free"],
+ cs:"household members with diarrhoea and food-handler contacts were identified; advised hand hygiene, stool sample if symptoms and exclusion until 48 h symptom-free"},
+{id:"leprosy",n:"Leprosy",cat:"72",iso:"standard precautions",dur:"",home:"",tx:["Skin smear / biopsy; refer dermatology / ID (multidrug therapy)"],ask:["Household contacts"],pep:["Household contacts: examination; single-dose rifampicin prophylaxis per programme"],vul:[],prev:[],cs:"household contacts were advised examination by the leprosy programme"},
+{id:"arbo",n:"Yellow fever / Zika / chikungunya / West Nile / Nipah / Rift Valley (arboviral)",cat:"I",iso:"standard precautions; mosquito-proof room (Nipah: droplet + contact)",dur:"",home:"mosquito-bite prevention for the first week",
+ tx:["Supportive; paracetamol (no NSAIDs until dengue excluded)","Serology / PCR through public health"],ask:["Travel, pregnant contacts / partner (Zika)"],pep:["No prophylaxis; Zika: avoid unprotected sex for 3 months (men) / 2 months (women) after travel"],vul:["Pregnant (Zika): obstetric referral, fetal ultrasound"],prev:["Vector control"],
+ cs:"pregnant contacts / partner were advised obstetric review (Zika) and mosquito-bite prevention"},
+{id:"schisto",n:"Schistosomiasis (bilharzia)",cat:"72",iso:"standard precautions",dur:"",home:"",tx:["Praziquantel 40 mg/kg PO (single or divided dose)","Urine / stool for ova; serology"],ask:["Fresh-water exposure, others exposed"],pep:["Others with the same fresh-water exposure: screening"],vul:[],prev:[],cs:"others with the same fresh-water exposure were advised screening"},
+{id:"mdro",n:"Multidrug-resistant organism (CRE / CPCRE / VRSA / VISA) — notifiable as an outbreak",cat:"I",iso:"contact precautions, single room, dedicated equipment",dur:"for the whole admission (per infection control)",home:"",tx:["Antibiotics per microbiology / ID"],ask:["Other patients in the same bay / unit"],pep:["Screening of contacts per infection control"],vul:[],prev:["Hand hygiene; flag the record"],cs:"infection control informed for screening of ward contacts"},
+{id:"unk",n:"Unusual / unexplained infectious disease or cluster",cat:"I",iso:"precautions per presentation (respiratory → droplet + contact; rash with fever → airborne)",dur:"until assessed by infection control",home:"",tx:["Discuss with ID; samples through public health"],ask:["Others with the same illness, travel, animal exposure"],pep:["Per public health"],vul:[],prev:[],cs:"others with similar illness were noted for public health"}
+];
+/* p278 — Notifiable diseases (Saudi MOH 2023 list, HESN). When a notifiable disease is suspected or confirmed in the dictation (or in Claude's impression):
+ ASSESSMENT gets "⚠ NOTIFIABLE DISEASE (suspected / confirmed): … — notify immediately / within 72 hours through HESN" (red, bold, ⚠).
+ MANAGEMENT gets: ⚠ infectious diseases / infection control informed + HESN + preventive measures (ORANGE for review unless you dictated it — then dark red, timed); isolation type and how long; contact tracing and what contacts were advised (prophylaxis / vaccine / pregnant contacts) — orange for review unless you dictated contacts.
+ A red box under the note gives the full detail: notification timeframe, isolation and duration, patient treatment with doses, questions to ask about close contacts, prophylaxis and vaccines for contacts, pregnant / infant / immunocompromised contacts, prevention and school / work exclusion.
+ Never fires on negated, ruled-out, vaccinated or past-history mentions. The Management guide has a "Notifiable diseases" page. */
+const NDBY={};ND.forEach(d=>NDBY[d.id]=d);
+const ND_RX=[
+ ["mers",/\bmers\b|mers-?cov|middle east respiratory/],
+ ["measles",/\bmeasles\b|rubeola|koplik/],["rubella",/rubella|german measles/],
+ ["varicella",/chicken ?pox|varicella(?! zoster immune)/],["zoster",/shingles|herpes zoster|\bzoster\b(?! immune)/],
+ ["mening",/meningococc|n\.? ?meningitidis|meningococcaemia|meningococcemia|purpura fulminans/],
+ ["hib",/haemophilus influenzae type b|h\.? influenzae type b|\bhib\b (?:meningitis|epiglottitis|bacteraemia|bacteremia|sepsis)/],
+ ["meningo",/\bmeningitis\b/],
+ ["tbx",/(?:tb|tuberculous|tuberculosis) (?:lymphadenitis|adenitis|spine|spondylitis|meningitis|pleural|pleurisy|peritonitis|abdominal|pericarditis)|pott'?s disease|extra-?pulmonary (?:tb|tuberculosis)|scrofula/],
+ ["tb",/\b(?:pulmonary )?tuberculosis\b|\bptb\b|\btb\b(?! (?:contact|test|screen|skin test|vaccin|clinic))|\bafb (?:smear )?positive/],
+ ["pertussis",/pertussis|whooping cough|\bwhoop(?:ing)?\b|post-?tussive vomiting/],
+ ["diph",/diphtheri|pseudomembran(?:e|ous) (?:tonsil|pharyn)|bull neck/],
+ ["mumps",/\bmumps\b|(?:bilateral )?(?:viral )?parotitis(?! .{0,15}(?:bacterial|suppurative))/],
+ ["hepa",/hepatitis a\b|\bhep a\b|\bhav\b(?: igm)?/],["hepb",/hepatitis b\b|\bhep b\b|hbsag (?:positive|reactive|\+)|\bhbv\b/],["hepc",/hepatitis c\b|\bhep c\b|\bhcv\b|anti-?hcv (?:positive|reactive)/],
+ ["hepe",/hepatitis [ed]\b|\bhep [ed]\b|\bhev\b|viral hepatitis/],
+ ["hiv",/\bhiv\b(?:[- ](?:1|2))?(?: (?:infection|positive|reactive|diagnos))|newly diagnosed hiv|hiv (?:test )?(?:positive|reactive)/],
+ ["avian",/avian (?:flu|influenza)|bird flu|h5n1|h7n9|novel influenza/],
+ ["flu",/influenza|\bflu\b (?:a|b)\b|\bflu (?:a|b)? ?(?:positive|pcr)|oseltamivir/],
+ ["covid",/covid|sars-?cov-?2|corona ?virus/],["rsv",/\brsv\b|respiratory syncytial/],
+ ["brucella",/brucell|malta fever/],["typhoid",/typhoid|paratyphoid|enteric fever|salmonella (?:typhi|paratyphi)/],
+ ["cholera",/cholera|rice[- ]water (?:stool|diarrh)/],
+ ["dengue",/dengue/],["malaria",/malaria|plasmodium|falciparum/],
+ ["vhf",/crimean|\bcchf\b|alkhurma|ebola|marburg|lassa|ha?emorrhagic fever|rift valley/],
+ ["bite",/(?:dog|cat|camel|monkey|bat|fox|wolf|donkey|horse|rat|hyena|animal|goat|sheep|baboon)[- ](?:bite|bit|scratch)|bitten by (?:[a-z]+ ){0,3}?(?:dog|cat|camel|monkey|bat|fox|wolf|donkey|horse|rat|animal|goat|sheep|baboon|hyena|snake|scorpion)|scorpion sting|snake ?bite|venomous|spider bite/],
+ ["rabies",/\brabies\b(?! (?:vaccine|vaccination|immunoglobulin|pep|prophylaxis|ig\b))|hydrophobia/],
+ ["scabies",/scabies|sarcoptes/],
+ ["tetanus",/(?:suspected|clinical|generali[sz]ed|locali[sz]ed|cephalic|neonatal) tetanus|tetanus (?:infection|disease)|lockjaw|risus sardonicus|opisthotonus/],
+ ["botulism",/botulism|botulinum (?:toxin )?(?:poisoning|intoxication)/],
+ ["afp",/acute flaccid paralysis|\bafp\b|poliomyelitis|\bpolio\b(?! (?:vaccine|vaccination|drops))/],
+ ["mpox",/\bmpox\b|monkey ?pox/],["leish",/leishmani/],["legion",/legionell|legionnaire/],["qfever",/\bq fever\b|coxiella/],
+ ["sti",/syphilis|chancre\b|gonorrh|gonococcal|chlamydia|trichomon|chancroid|lymphogranuloma|genital ulcer|genital herpes|genital hsv|donovanosis|granuloma inguinale/],
+ ["tss",/toxic shock/],["ipd",/invasive pneumococcal|pneumococcal (?:bacteraemia|bacteremia|meningitis|sepsis)/],["listeria",/listeri/],
+ ["ophneo",/ophthalmia neonatorum|neonatal conjunctivitis/],
+ ["co",/carbon monoxide|\bco poisoning|\bcohb\b|carboxyh(?:a)?emoglobin/],
+ ["etoh",/methanol|toxic alcohol|alcohol (?:intoxication|poisoning|overdose)|ethanol (?:intoxication|poisoning)|intoxicated with alcohol/],
+ ["lead",/lead poisoning|blood lead/],
+ ["bio",/\bplague\b|yersinia pestis|anthrax|smallpox|variola major|bioterror/],
+ ["enteric",/shigell|dysentery|salmonell(?!a (?:typhi|paratyphi))|campylobacter|\bstec\b|\bvtec\b|o157|ha?emolytic ura?emic|giardi|cryptosporid|norovirus/],
+ ["leprosy",/leprosy|hansen'?s disease/],
+ ["arbo",/yellow fever|\bzika\b|chikungunya|west nile|\bnipah\b/],
+ ["schisto",/schistosom|bilharzi/],
+ ["mdro",/\bcp-?cre\b|\bcre\b|carbapenem[- ]resistant|carbapenemase|\bvrsa\b|\bvisa\b(?= )|vancomycin[- ](?:resistant|intermediate) staph/]];
+const ND_NEG=/\b(?:no|not|without|negative|unlikely|ruled? out|excluded|r\/o'?d|less likely|denies|vaccinated|vaccine|vaccination|immuni[sz]ed|immunity|immune|history of|h\/o|past|previous|previously|old (?:tb|case|infection)|treated|known case of|known|childhood|completed|contact with a case|exposure to|exposed to|risk of|prophylaxis|screen(?:ing)?)\b/;
+function ndCtx(t,i,len){const s0=Math.max(t.lastIndexOf(".",i-1),t.lastIndexOf(";",i-1),t.lastIndexOf("\n",i-1),t.lastIndexOf(",",i-1))+1;return t.slice(Math.max(s0,i-45),i)}
+function ndHit(t,rx){const g=new RegExp(rx.source,"gi");let m;while((m=g.exec(t))){const pre=ndCtx(t,m.index).toLowerCase();const post=t.slice(m.index+m[0].length,m.index+m[0].length+25).toLowerCase();
+ if(ND_NEG.test(pre)&&!/\b(?:suspected|query|\?|likely|probable|possible|confirmed|r\/o)\s*$/.test(pre))continue;if(/^\s*(?:unlikely|ruled out|excluded|negative|vaccin|immun|status|contact|exposure|was excluded)/.test(post))continue;return m}return null}
+function ndDetect(raw,B){const R=String(raw||"");const Bt=B&&B.L?B.L.filter(z=>z[1]!=="h"&&!/^(?:Advised to return|⚠ NOTIFIABLE|⚠ The infectious|Isolation:|Close contacts)/.test(z[0]||"")).map(z=>z[0]).join("\n"):"";
+ const imp=B&&B.L?B.L.filter(z=>/^Impression|^Working diagnosis/i.test(z[0]||"")).map(z=>String(z[0]).split(/\b(?:differential|ddx|versus|vs\.?|to rule out|r\/o)\b/i)[0]).join("\n"):"";
+ const T=(R+"\n"+imp).replace(/\r/g,"");const all=(R+"\n"+Bt).toLowerCase();const out=[];const has=id=>out.some(x=>x.id===id);
+ for(const [id,rx] of ND_RX){if(id==="meningo"&&(has("mening")||has("hib")))continue;if(id==="tb"&&has("tbx"))continue;if(id==="hepe"&&(has("hepa")||has("hepb")||has("hepc")))continue;if(id==="rabies"&&has("bite")&&!/hydrophobia|clinical rabies|rabies encephalitis/i.test(T))continue;
+  let m=ndHit(R,rx);if(!m){const anyRaw=new RegExp(rx.source,"i").test(R);if(anyRaw)continue;m=ndHit(T,rx);if(!m)continue}
+  if(["hepb","hepc","hiv"].includes(id)){const w=T.slice(Math.max(0,m.index-60),m.index+m[0].length+60);if(!/\b(?:positive|reactive|diagnos\w*|detected|confirmed|new(?:ly)?)\b/i.test(w)||/needle|sharps|exposure|source (?:patient|status)|status (?:is )?unknown|screen|serology (?:sent|pending)|pending|vaccin/i.test(w))continue}
+  if(["hepb","hepc","hiv"].includes(id)&&/\b(?:known|k\/c|case of|on treatment|chronic|history of|follow[- ]up)\b[^.]{0,30}$/i.test(T.slice(Math.max(0,m.index-40),m.index)))continue;
+  if(["flu","covid","rsv"].includes(id)&&!(/\b(?:admit|admission|admitted|hospitali[sz]|icu|ward|died|death)\b/i.test(all)&&/\b(?:positive|confirmed|pcr|swab|rapid test|detected)\b/i.test(all)))continue;
+  if(id==="mdro"&&!/outbreak|cluster|\b(?:two|2|several|multiple) (?:patients|cases)/i.test(all))continue;
+  const near=T.slice(Math.max(0,m.index-50),m.index+m[0].length+50).toLowerCase();
+  const st=/\b(?:confirmed|positive|detected|reactive|pcr \+|culture grew|grew)\b/.test(near)&&!/\b(?:suspected|query|\?|likely|probable|possible)\b/.test(near)?"confirmed":"suspected";
+  out.push({id,st})}
+ /* MERS by the MOH suspected-case definition: fever / respiratory illness + camel contact or contact with a MERS case */
+ if(!has("mers")){const o={raw:R};const clin=qnPositive(/fever|febrile|pneumonia|cough|shortness of breath|\bsob\b|dyspn|ards/,o);const epi=/camel|raw camel milk|mers (?:case|patient|contact)|contact with (?:a )?(?:confirmed )?mers/i.test(R)&&!/no (?:camel|contact)[^.]{0,20}camel|denies[^.]{0,30}camel/i.test(R);
+  if(clin&&epi)out.push({id:"mers",st:"suspected",why:"fever / respiratory illness + camel or MERS-case contact (MOH case definition)"})}
+ /* fever and rash illness (measles / rubella) */
+ if(!has("measles")&&!has("rubella")&&!has("varicella")&&!has("dengue")){const o={raw:R};if(qnPositive(/fever|febrile/,o)&&qnPositive(/maculopapular|morbilliform|generali[sz]ed (?:erythematous )?rash|measles[- ]like/,o)&&qnPositive(/cough|coryza|runny nose|conjunctivitis|red eyes|koplik|rash/,o))out.push({id:"measles",st:"suspected",why:"fever and rash illness (MOH notifiable: measles / rubella)"})}
+ /* foodborne outbreak: ≥ 2 related cases */
+ if(!has("food")&&/(?:food poisoning|gastroenteritis|diarrh|vomit)/i.test(R)&&/(?:family|others|friends|people|members|colleagues|relatives|brothers?|sisters?|wife|husband|children|kids|guests|workers)[^.]{0,50}(?:same|also|similar|too)|ate (?:the )?same|same (?:food|meal|restaurant|dish)|outbreak|\b(?:two|three|four|five|several|\d+) (?:people|persons|members|patients)[^.]{0,30}(?:sick|ill|symptoms|vomit|diarrh)/i.test(R))out.push({id:"food",st:"suspected"});
+ return out}
+/* timing of the ID / IPC call when dictated */
+function ndInformed(raw){const r=String(raw||"");const m=r.match(/(?:informed|notified|called|contacted|discussed with|spoke (?:to|with)|reported to|d\/w)\s+(?:the\s+)?(?:infectious diseases?|\bid\b|infection (?:control|prevention)|\bipc\b|public health|hesn|preventive medicine|surveillance)[^.;\n]{0,40}|(?:infectious diseases?|\bid\b|infection (?:control|prevention)|\bipc\b|public health|hesn)\s+(?:team\s+)?(?:was\s+|were\s+|is\s+)?(?:informed|notified|called|contacted|aware)[^.;\n]{0,40}/i);if(!m)return null;const tm=m[0].match(/\b(?:at\s*)?([01]?\d|2[0-3])[:.]([0-5]\d)\b/);return {t:tm?`${tm[1].padStart(2,"0")}:${tm[2]}`:""}}
+function ndContactsSaid(raw){return /\bcontacts?\b|household|family|siblings?|brothers?|sisters?|mother|father|wife|husband|pregnant|children|kids|at home|roommates?|colleagues|classmates|others who ate|same food/i.test(String(raw||""))}
+/* build the note lines */
+function ndApply(B,raw){try{if(!B||!B.L||B.addendum)return B;const L=B.L;try{const qi=$("qnIn")&&$("qnIn").value;if(qi&&qi!==raw)raw=String(raw||"")+"\n"+qi}catch(e){}
+ for(let i=L.length-1;i>=0;i--)if(/^(?:⚠ NOTIFIABLE DISEASE|⚠ The infectious diseases|⚠ Infection control|Isolation \(notifiable|Close contacts \(notifiable)/.test(L[i][0]||""))L.splice(i,1);
+ const hits=ndDetect(raw,B);B.nd=hits;if(!hits.length)return B;
+ const txt=L.map(z=>z[0]||"").join("\n");const disc=/discharged|sent home|home isolation/i.test(txt)&&!/under observation|admitted|admission|transferred/i.test(txt);
+ let inf=null;try{const q=$("qnIn")&&$("qnIn").value;const a1=q?ndInformed(q):null,a2=ndInformed(raw);inf=(a1&&a1.t)?a1:(a2&&a2.t)?a2:(a1||a2)}catch(e){inf=ndInformed(raw)}const cs=ndContactsSaid(raw);
+ if(inf&&inf.t)for(let i=L.length-1;i>=0;i--){const t=L[i][0]||"";if(L[i][1]!=="h"&&new RegExp("on-?call (?:team|doctor|physician)?\\s*(?:was|were)? ?contacted at "+inf.t.replace(":","[:.]"),"i").test(t)&&/\b(?:id|infectious|infection control|ipc|public health)\b/i.test(String($("qnIn")&&$("qnIn").value||raw))&&!/\b(?:surgery|surgical|medicine|medical|ortho|paediatric|pediatric|obs|gyn|cardio|neuro|uro|ent|icu)\b/i.test(t))L.splice(i,1)}
+ if(inf)for(let i=L.length-1;i>=0;i--){const t=L[i][0]||"";if(L[i][1]!=="h"&&t.length<90&&/^(?:the )?(?:id|infectious diseases?|infection (?:control|prevention)|ipc|public health)(?: team)?(?: was| were)? (?:informed|notified|contacted|called|aware)\b|^(?:informed|notified|contacted|called) (?:the )?(?:id|infectious diseases?|infection control|ipc|public health)\b/i.test(t))L.splice(i,1)}
+ let ai=L.findIndex(z=>z[1]==="h"&&z[0]==="ASSESSMENT");let ins;if(ai>=0){ins=ai+1;while(ins<L.length&&L[ins][1]!=="h"&&/^(?:Impression|Differential|Working)/i.test(L[ins][0]||""))ins++}else{ai=L.findIndex(z=>z[1]==="h"&&z[0]==="HISTORY");ins=ai>=0?ai+1:0;while(ins<L.length&&L[ins][1]!=="h")ins++}
+ const aLines=hits.map(h=>{const d=NDBY[h.id];return [`⚠ NOTIFIABLE DISEASE (${h.st}): ${d.n} — Saudi MOH notification ${d.cat==="I"?"IMMEDIATELY":"within 72 hours"} through HESN${h.why?` (${h.why})`:""}.`,"nd"]});
+ L.splice(ins,0,...aLines);
+ let mi=L.findIndex(z=>z[1]==="h"&&z[0]==="MANAGEMENT");if(mi<0){const di=L.findIndex(z=>z[1]==="h"&&z[0]==="DISPOSITION");const at=di>=0?di:L.length;L.splice(at,0,["MANAGEMENT","h"]);mi=at}
+ const names=hits.map(h=>NDBY[h.id].n.replace(/\s*\(.*?\)\s*/g," ").trim()).join(" / ");
+ const M=[];const anyInf=hits.some(h=>!/not infectious/.test(NDBY[h.id].iso));
+ if(!anyInf)M.push([`⚠ The case (${names}) was notified to public health through HESN${inf&&inf.t?` at ${inf.t}`:""}; preventive measures were advised.`,"ndn"]);else M.push([`⚠ The infectious diseases / infection control team was informed${inf&&inf.t?` at ${inf.t}`:""} about the ${hits.every(h=>h.st==="confirmed")?"confirmed":"suspected"} case (${names}) and it was notified to public health through HESN; ${anyInf?"isolation and preventive measures were taken":"preventive measures were advised"}.`,"ndn"]);
+ hits.forEach(h=>{const d=NDBY[h.id];if(/not infectious/.test(d.iso)){if(disc&&d.home)M.push([`Advice (${d.n.split(" (")[0]}): ${d.home}.`,"ndi"]);return}
+  if(/^standard precautions/.test(d.iso)&&!d.dur&&!(disc&&d.home))return;M.push(disc&&d.home?[`Home isolation (${d.n.split(" (")[0]}): ${d.home}.`,"ndi"]:[`Isolation (${d.n.split(" (")[0]}): ${d.iso}${d.dur?` — ${d.dur}`:""}.`,"ndi"])});
+ hits.forEach(h=>{const d=NDBY[h.id];if(d.cs)M.push([`Close contacts (${d.n.split(" (")[0]}): ${d.cs}.`,"ndc"])});
+ L.splice(mi+1,0,...M);B.ndInf=!!inf;B.ndCs=cs}catch(e){console.warn("p278",e)}return B}
+{const _a=auditApply;auditApply=function(B,raw){const R=_a(B,raw);try{if(R&&R.L&&!R.addendum)ndApply(R,raw)}catch(e){}return R}}
+/* colours: NOTIFIABLE line red bold large with ⚠; notification line dark red bold when dictated, ORANGE when not yet confirmed; isolation dark blue; contacts dark blue (orange if contacts were not dictated) */
+const ND_RED="color:#b71c1c;font-weight:bold;font-size:1.08em",ND_DR="color:#b71c1c;font-weight:bold",ND_BL="color:#0d47a1";
+let NDCUR=null;
+{const _h=qnHTML;qnHTML=function(B,inline){NDCUR=B||null;try{return _h(B,inline)}finally{NDCUR=null}}}
+{const _l=c3Line;c3Line=function(t,k,sec,age){if(k==="nd")return `<span style="${ND_RED}">${esc(t)}</span>`;
+ if(k==="ndn"){const ok=NDCUR&&NDCUR.ndInf;return ok?`<span style="${ND_DR}">${esc(t)}</span>`:`<span class="c3o" style="color:#e65100;font-weight:bold" title="Confirm you informed ID / infection control and notified HESN before submitting">${esc(t)}</span>`}
+ if(k==="ndi")return `<span style="${ND_BL}">${esc(t)}</span>`;
+ if(k==="ndc"){const ok=NDCUR&&NDCUR.ndCs;return ok?`<span style="${ND_BL}">${esc(t)}</span>`:`<span class="c3o" style="color:#e65100;font-weight:bold" title="Contacts were not dictated — confirm you asked about them">⚠ ${esc(t)}</span>`}
+ return _l(t,k,sec,age)}}
+/* the orange-review box (p277) lists them too */
+{const _cc=chkCompute;chkCompute=function(B){const M=_cc(B);try{if(B&&B.L){B.L.forEach(([t,k])=>{if(k==="ndn"&&!B.ndInf)M.set(t,"notifiable disease — confirm ID / infection control informed and HESN notification done (dictate \"ID informed at HH:MM\")");if(k==="ndc"&&!B.ndCs)M.set(t,"contacts not dictated — confirm you asked about close contacts")})}}catch(e){}return M}}
+/* full detail box under the note */
+function ndBoxHTML(d,st){const row=(h,a)=>a&&a.length?`<div style="padding:3px 8px;border-top:1px solid #ffcdd2"><b style="color:#7f0000">${h}</b>${Array.isArray(a)?`<ul style="margin:2px 0 0;padding-left:18px">${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:`: ${esc(a)}`}</div>`:"";
+ return `<div style="margin:6px 0;border:1px solid #ef9a9a;border-left:5px solid #b71c1c;border-radius:8px;background:#fff5f5;font-size:.78rem"><div style="padding:5px 8px;color:#b71c1c;font-weight:bold">⚠ ${esc(d.n)}${st?` — ${esc(st)}`:""} · notify ${d.cat==="I"?"IMMEDIATELY":"within 72 hours"} (HESN; phone public health / infection control for immediate diseases)</div><div style="overflow-wrap:anywhere">${row("Isolation",d.iso)}${row("How long",d.dur)}${row("If sent home",d.home)}${row("Treatment (patient)",d.tx)}${row("Ask about contacts",d.ask)}${row("Contacts: prophylaxis / vaccine",d.pep)}${row("Pregnant / infants / immunocompromised",d.vul)}${row("Prevention / exclusion",d.prev)}</div><div class="mini" style="padding:3px 8px;color:#555">Saudi MOH notifiable diseases list 2023 (HESN); MOH MERS-CoV guideline v5.1; doses from standard references (CDC / UKHSA / WHO) — confirm with infectious diseases and the local formulary.</div></div>`}
+function ndBox(){try{const out=$("qnOut");if(!out)return;let b=$("ndBox");const B=(typeof QAI!=="undefined"&&QAI.B)||(qnLast&&qnLast.B);const hits=(B&&B.nd)||[];if(!hits.length){if(b)b.remove();return}
+ if(!b){const anchor=$("chkBox")||out;anchor.insertAdjacentHTML("afterend",`<div id="ndBox" class="noprint"></div>`);b=$("ndBox")}
+ b.innerHTML=hits.map(h=>ndBoxHTML(NDBY[h.id],h.st)).join("")}catch(e){}}
+{const _h2=qnHTML;qnHTML=function(B,inline){const r=_h2(B,inline);setTimeout(ndBox,0);return r}}
+/* Claude: notifiable wording */
+if(typeof qaiPrompt==="function"){const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n","RULES\n0nd. If a notifiable infectious disease is suspected or confirmed, write it in the impression as \"suspected …\" or \"confirmed …\". Do NOT write that infectious diseases / infection control / HESN were informed, nor any contact advice, unless dictated — the page adds those lines for review.\n")}}
+/* Management guide */
+try{GD["Notifiable diseases (Saudi MOH, HESN)"]=`<p><b>Notify through HESN</b> as the attending physician when the disease is <b>suspected</b> — do not wait for confirmation. <b>Immediately</b> (and phone public health / infection control) or <b>within 72 hours</b>, per the MOH list 2023. In the note: dictate "ID informed at HH:MM" and the contacts you asked about, and the orange lines turn into normal lines.</p>`+ND.map(d=>ndBoxHTML(d,"")).join("");
+ ND.forEach(d=>{GD["Notifiable: "+d.n]=ndBoxHTML(d,"")})}catch(e){}
+/* unit slashes from Claude ("130/min", "2 L/min", "mg/kg") were turned into "or" — keep them (division-slash character, looks the same) */
+if(typeof qaiToB==="function"){const _t=qaiToB;qaiToB=function(J){try{(J.sections||[]).forEach(s=>(s.lines||[]).forEach(l=>{if(l&&l.t)l.t=String(l.t).replace(/([0-9a-zA-Zµ%])\s*\/\s*(min|minute|h|hr|hrs|hour|day|d|kg|dl|l|ml|mmhg|week|wk|month|year|24 ?h|m2|m²)\b/gi,"$1∕$2")}))}catch(e){}return _t(J)}}
+/* remove a section heading left empty */
+{const _a=auditApply;auditApply=function(B,raw){const R=_a(B,raw);try{if(R&&R.L){const L=R.L;for(let i=L.length-1;i>=0;i--){if(L[i][1]!=="h")continue;let j=i+1;while(j<L.length&&!L[j][0]&&L[j][1]!=="h")j++;if(j>=L.length||L[j][1]==="h"){L.splice(i,j-i);if(i>0&&!L[i-1][0]&&L[i-1][1]!=="h")L.splice(i-1,1)}}}}catch(e){}return R}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
