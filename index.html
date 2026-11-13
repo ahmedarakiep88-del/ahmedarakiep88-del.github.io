@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v256";
+const ER_VERSION="v257";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -21616,5 +21616,29 @@ const STI_ADV="The patient was advised to inform the sexual partner(s) about the
 {const _na=ndApply;ndApply=function(B,raw){try{if(B&&B.L&&!B.ff)for(let i=B.L.length-1;i>=0;i--)if(B.L[i][0]===STI_ADV)B.L.splice(i,1)}catch(e){}return _na(B,raw)}}
 {const _n=noteHTML;noteHTML=function(t){let h=_n(t);try{if(h.includes("inform the sexual partner"))h=h.split(/(\n|<br\s*\/?>)/).map(line=>{const txt=c3Unesc(line.replace(/<[^>]+>/g,""));return txt===STI_ADV?`<span style="color:#0d47a1">${esc(txt)}</span>`:line}).join("")}catch(e){}return h}}
 try{GD["Past infectious history — previously notifiable / infectious disease"]=`<p>In the <b>⚠ Notifiable disease?</b> box (quick note and regular note) use <b>Previously diagnosed with notifiable disease</b> or <b>Previously diagnosed with infectious disease</b>, pick the disease and its status. The note gets a red past-history line; it never starts a new notification.</p>`}catch(e){}
+/* p283 — The "⚠ Notifiable disease?" question, with "Previously diagnosed with notifiable disease" and "Previously diagnosed with infectious disease", moves to the START:
+ REGULAR NOTE — its own box on page 2 "History, medicines, allergies and immunization" (with past medical history and allergies), no longer under the note on the last page. A one-line reminder stays under the note: the answer, or "not answered" with a button that jumps back to the question.
+ QUICK NOTE — directly under the dictation box, above the note; the detail boxes (notifiable, cranial nerve, exposure pathway) stay under the note. */
+function ndPlaceForm(){try{const pf=(typeof PTFS!=="undefined"&&PTFS)||($("age")&&$("age").closest("fieldset"));if(!pf)return;let fs=$("ndFS");
+ if(!fs){/* first element of the history part of the Patient box = top of page 2 in step-by-step mode, right after the patient details otherwise */
+  const first=[...pf.children].find(c=>c.dataset&&c.dataset.gpart==="hx");const html=`<div id="ndFS" data-gpart="hx" style="margin:8px 0 12px;padding:8px 10px;border:2px solid #ef9a9a;border-radius:10px;background:#fffafa"><b style="color:#b71c1c">⚠ Notifiable / infectious disease</b><div class="mini" style="margin:2px 0 4px">Is this a notifiable disease now? Was the patient previously diagnosed with a notifiable or an infectious disease?</div></div>`;
+  if(first)first.insertAdjacentHTML("beforebegin",html);else pf.insertAdjacentHTML("beforeend",html);fs=$("ndFS");try{if(typeof gApply==="function")gApply(false)}catch(e){}}
+ let w=$("ndW_form");if(!w){fs.insertAdjacentHTML("beforeend",`<div id="ndW_form" class="noprint" style="margin:6px 0;padding:7px 9px;border:1px solid #ef9a9a;border-left:5px solid #b71c1c;border-radius:8px;background:#fff;font-size:.82rem"></div>`)}else if(w.parentElement!==fs)fs.appendChild(w);
+ const bx=$("ndBoxF");if(bx&&bx.parentElement!==fs)fs.appendChild(bx)}catch(e){console.warn("p283 form",e)}}
+function ndPlaceQuick(){try{const out=$("qnOut");if(!out)return;let w=$("ndW_quick");if(!w){out.insertAdjacentHTML("beforebegin",`<div id="ndW_quick" class="noprint" style="margin:6px 0;padding:7px 9px;border:1px solid #ef9a9a;border-left:5px solid #b71c1c;border-radius:8px;background:#fff;font-size:.82rem"></div>`)}
+  else if(!(w.compareDocumentPosition(out)&Node.DOCUMENT_POSITION_FOLLOWING))out.parentElement.insertBefore(w,out);
+ /* detail boxes stay UNDER the note, in a fixed order */
+ let anchor=$("chkBox")||out;["ndBox","cnBox","xpBox"].forEach(id=>{const b=$(id);if(!b)return;if(anchor.nextElementSibling!==b)anchor.insertAdjacentElement("afterend",b);anchor=b})}catch(e){console.warn("p283 quick",e)}}
+/* reminder under the regular note */
+function ndStatForm(){try{const host=$("note");if(!host)return;let el=$("ndStat_form");if(!el){host.insertAdjacentHTML("afterend",`<div id="ndStat_form" class="noprint mini" style="margin:4px 0;padding:4px 8px;border-left:4px solid #b71c1c;border-radius:6px;background:#fff5f5"></div>`);el=$("ndStat_form")}
+ const St=NDS.form,hits=NDF.hits||[],P=PV.form;const ans=St.ans||(hits.length?"yes":null);
+ const a=ans===null?`<b style="color:#e65100">⚠ Notifiable disease: not answered</b>`:ans==="no"?`Notifiable disease: <b>No</b>`:`<b style="color:#b71c1c">⚠ Notifiable disease: ${hits.length?hits.map(h=>esc(NDBY[h.id].n.split(" (")[0])+" ("+h.st+")").join("; "):"Yes — choose the disease"}</b>`;
+ const pv=(P.nd.length||P.inf.length)?` · Previously diagnosed: ${esc([...P.nd,...P.inf].map(x=>x.n).join("; "))}`:"";
+ el.innerHTML=`${a}${pv} <button type="button" class="b sm ghost" id="ndGo_form" style="margin-left:6px">${ans===null?"Answer it":"Change"} (page 2)</button>`;
+ $("ndGo_form").onclick=()=>{try{const i=GSTEPS.findIndex(s=>s.id==="hx");if(typeof gOn!=="undefined"&&gOn&&i>=0){gCur=i;gApply(false)}}catch(e){}try{$("ndFS").scrollIntoView({behavior:"smooth",block:"center"})}catch(e){}}}catch(e){}}
+{const _w=ndWidget;ndWidget=function(mode){try{if(mode==="form")ndPlaceForm();else ndPlaceQuick()}catch(e){}_w(mode);try{if(mode==="form"){ndPlaceForm();ndStatForm()}else ndPlaceQuick()}catch(e){}}}
+{const _r=renderOut;renderOut=function(){_r();try{ndPlaceForm();ndStatForm()}catch(e){}}}
+{const _h=qnHTML;qnHTML=function(B,inline){const r=_h(B,inline);setTimeout(ndPlaceQuick,30);return r}}
+setTimeout(()=>{try{ndPlaceForm();ndPlaceQuick();ndWidget("form");ndWidget("quick");if(typeof gApply==="function")gApply(false)}catch(e){}},1700);
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
