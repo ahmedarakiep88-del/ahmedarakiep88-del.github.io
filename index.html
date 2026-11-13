@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v257";
+const ER_VERSION="v258";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -21640,5 +21640,70 @@ function ndStatForm(){try{const host=$("note");if(!host)return;let el=$("ndStat_
 {const _r=renderOut;renderOut=function(){_r();try{ndPlaceForm();ndStatForm()}catch(e){}}}
 {const _h=qnHTML;qnHTML=function(B,inline){const r=_h(B,inline);setTimeout(ndPlaceQuick,30);return r}}
 setTimeout(()=>{try{ndPlaceForm();ndPlaceQuick();ndWidget("form");ndWidget("quick");if(typeof gApply==="function")gApply(false)}catch(e){}},1700);
+/* p284 — Follow-up list: a new tab "📌 Follow-up list" beside Full form / Quick note / Board.
+ Add a patient in two ways: (1) in the tab — type the MRN and a small note (any patient, also one who is not yours); (2) at the end of a note — the "📌 Follow-up" button beside Copy in the quick note and in the regular note adds YOUR patient with a short title taken from the note (age / sex, impression) and a copy of the note; the MRN is optional.
+ Each entry stays until you delete it: shows the MRN, the note, when it was added and how many days ago, dated updates you add ("results back, called the patient…"), the saved note, and "Start follow-up visit note" which opens the quick note in follow-up mode with that note already pasted.
+ The MRN is kept ONLY in this browser (this device): it is never written in a note and never sent to Telegram, ntfy, the review store or Claude. */
+const FULK="erFulList";
+function fulLoad(){try{return JSON.parse(localStorage.getItem(FULK)||"[]")}catch(e){return []}}
+function fulStore(a){try{localStorage.setItem(FULK,JSON.stringify(a))}catch(e){}fulBadge()}
+function fulBadge(){try{const n=fulLoad().length;const el=$("fulN");if(el)el.textContent=n?` (${n})`:""}catch(e){}}
+function fulWhen(t){try{const d=new Date(t);return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"})+" "+d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"})}catch(e){return ""}}
+function fulDays(t){const a=new Date(t),b=new Date();a.setHours(0,0,0,0);b.setHours(0,0,0,0);const n=Math.round((b-a)/864e5);return n<=0?"today":n===1?"1 day ago":n+" days ago"}
+function fulTitle(text){try{const L=String(text||"").split("\n").map(l=>l.trim()).filter(Boolean);const who=(L.find(l=>/^An? [^.]{0,60}?(?:year|month|week|day)s?-old [a-z ]+?\b/i.test(l))||"").match(/^An? [^.]*?-old (?:baby )?(?:boy|girl|male|female|man|woman|child|infant)/i);
+ const imp=(L.find(l=>/^Impression:/i.test(l))||"").replace(/^Impression:\s*/i,"").replace(/\.$/,"");const cc=(L.find(l=>/^C\/O /i.test(l))||"").replace(/^C\/O\s*/i,"");
+ return [who?who[0].replace(/^An? /,""):"",imp||cc].filter(Boolean).join(" — ").slice(0,140)}catch(e){return ""}}
+function fulAdd(o){const a=fulLoad();a.unshift({id:"f"+Date.now().toString(36)+Math.floor(Math.random()*1e3),t:Date.now(),mrn:String(o.mrn||"").trim().slice(0,24),note:String(o.note||"").trim().slice(0,600),src:o.src||"manual",title:String(o.title||"").slice(0,160),snap:String(o.snap||"").slice(0,9000),ups:[]});fulStore(a);try{if(typeof qnTab!=="undefined"&&qnTab==="ful")fulDraw()}catch(e){}}
+/* ---------- tab + panel ---------- */
+{const q=document.querySelector('[data-qtab="quick"]');if(q&&!document.querySelector('[data-qtab="ful"]'))q.insertAdjacentHTML("afterend",`<button type="button" data-qtab="ful" aria-pressed="false">📌 Follow-up list<span id="fulN"></span></button>`);
+ const host=$("qnBoard")||$("qnPanel");if(host&&!$("fulPanel"))host.insertAdjacentHTML("afterend",`<div id="fulPanel" class="qnHide" style="max-width:860px;margin:0 auto;padding:10px 12px">
+ <fieldset><legend>📌 Follow-up list</legend>
+ <p class="mini" style="margin:0 0 6px">Patients to follow up. They stay here until you delete them. The MRN is kept only in this browser — it is never written in a note or sent anywhere.</p>
+ <div style="display:grid;grid-template-columns:minmax(120px,170px) 1fr;gap:8px;align-items:start"><label class="f">MRN<input id="fulMrn" inputmode="numeric" autocomplete="off" placeholder="MRN"></label><label class="f">Small note<textarea id="fulNote" rows="2" placeholder="e.g. chest pain, troponin pending — call with the result; CT report tomorrow"></textarea></label></div>
+ <div class="btns" style="margin-top:6px"><button type="button" class="b" id="fulAddBtn">Add to the list</button><span id="fulSt" class="mini"></span></div>
+ <div style="display:flex;gap:8px;align-items:center;margin-top:10px"><input id="fulFind" placeholder="Search MRN or note…" style="flex:1" autocomplete="off"><span id="fulCount" class="mini"></span></div>
+ <div id="fulOut" style="margin-top:8px"></div></fieldset></div>`);
+ document.head.insertAdjacentHTML("beforeend",`<style>#fulPanel label.f input,#fulPanel label.f textarea,#fulPanel [data-fe],.fulBox input{width:100%;box-sizing:border-box;min-width:0}.fulC{border:1px solid var(--line,#ddd);border-left:5px solid #0d47a1;border-radius:10px;padding:8px 10px;margin:8px 0;background:var(--card,#fff)}.fulC.mine{border-left-color:#2e7d32}.fulM{font-weight:800;font-size:1.05rem;color:#0d47a1}.fulT{font-weight:700}.fulU{margin:4px 0 0;padding-left:18px;font-size:.84rem}.fulSnap{white-space:pre-wrap;font-size:.8rem;border:1px solid var(--line,#ddd);border-radius:8px;padding:6px 8px;margin-top:6px;max-height:320px;overflow:auto;background:var(--soft,#fafafa)}.fulBox{margin:6px 0;padding:7px 9px;border:1px solid #90caf9;border-left:4px solid #0d47a1;border-radius:8px;font-size:.84rem;background:var(--card,#fff)}</style>`)}
+{const _qs=qnShow;qnShow=function(t){_qs(t);try{$("fulPanel").classList.toggle("qnHide",t!=="ful");if(t==="ful")fulDraw()}catch(e){}}}
+let FUL_OPEN={},FUL_EDIT="",FUL_DEL="";
+function fulDraw(){try{const out=$("fulOut");if(!out)return;const q=String(($("fulFind")&&$("fulFind").value)||"").trim().toLowerCase();const all=fulLoad();const a=q?all.filter(x=>(x.mrn+" "+x.note+" "+x.title+" "+(x.ups||[]).map(u=>u.x).join(" ")).toLowerCase().includes(q)):all;
+ $("fulCount").textContent=all.length?`${a.length} of ${all.length}`:"";
+ out.innerHTML=a.length?a.map(x=>{const ed=FUL_EDIT===x.id;return `<div class="fulC${x.src==="note"?" mine":""}" data-fid="${x.id}">
+  <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:baseline"><span class="fulM">${x.mrn?"MRN "+esc(x.mrn):"MRN not entered"}</span><span class="mini">${x.src==="note"?"my patient — from the note":"added manually"} · ${esc(fulWhen(x.t))} · <b>${esc(fulDays(x.t))}</b></span></div>
+  ${ed?`<div style="display:grid;grid-template-columns:minmax(110px,160px) 1fr;gap:8px;margin-top:6px"><input data-fe="mrn" value="${esc(x.mrn)}" placeholder="MRN" inputmode="numeric"><textarea data-fe="note" rows="2" placeholder="Small note">${esc(x.note)}</textarea></div><div class="btns" style="margin-top:6px"><button type="button" class="b sm" data-fa="save">Save</button><button type="button" class="b sm ghost" data-fa="cancel">Cancel</button></div>`
+  :`${x.title?`<div class="fulT">${esc(x.title)}</div>`:""}${x.note?`<div>${esc(x.note)}</div>`:""}`}
+  ${(x.ups||[]).length?`<ul class="fulU">${x.ups.map((u,i)=>`<li><b>${esc(fulWhen(u.t))}</b> — ${esc(u.x)} <a href="#" data-fa="delup" data-i="${i}" class="mini" title="Remove this update">✕</a></li>`).join("")}</ul>`:""}
+  <div style="display:flex;gap:6px;margin-top:6px"><input data-fup="1" placeholder="Add an update (result, call, plan)…" style="flex:1" autocomplete="off"><button type="button" class="b sm" data-fa="up">Add</button></div>
+  <div class="btns" style="margin-top:6px">${x.snap?`<button type="button" class="b sm ghost" data-fa="snap">${FUL_OPEN[x.id]?"Hide the note":"Show the note"}</button><button type="button" class="b sm ghost" data-fa="fuv">Start follow-up visit note</button>`:""}<button type="button" class="b sm ghost" data-fa="edit">Edit</button>${FUL_DEL===x.id?`<button type="button" class="b sm" data-fa="del2" style="background:#b71c1c;border-color:#b71c1c;color:#fff">Confirm delete</button><button type="button" class="b sm ghost" data-fa="delno">Keep</button>`:`<button type="button" class="b sm ghost" data-fa="del">Delete</button>`}</div>
+  ${x.snap&&FUL_OPEN[x.id]?`<div class="fulSnap">${esc(x.snap)}</div>`:""}</div>`}).join(""):`<p class="mini">${all.length?"No match.":"The list is empty. Add a patient above, or use the 📌 Follow-up button at the end of a note."}</p>`;fulBadge()}catch(e){console.warn("fulDraw",e)}}
+{const P=$("fulPanel");if(P){
+ $("fulAddBtn").onclick=()=>{const m=$("fulMrn").value.trim(),n=$("fulNote").value.trim();if(!m&&!n){$("fulSt").textContent="Type the MRN or a note first.";return}fulAdd({mrn:m,note:n,src:"manual"});$("fulMrn").value="";$("fulNote").value="";$("fulSt").textContent="Added.";setTimeout(()=>{try{$("fulSt").textContent=""}catch(e){}},2500);fulDraw()};
+ $("fulFind").oninput=()=>fulDraw();
+ $("fulOut").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.matches("[data-fup]")){e.preventDefault();const b=e.target.closest(".fulC").querySelector('[data-fa="up"]');if(b)b.click()}});
+ $("fulOut").addEventListener("click",e=>{const b=e.target.closest("[data-fa]");if(!b)return;e.preventDefault();const card=b.closest("[data-fid]");const id=card.dataset.fid;const a=fulLoad();const x=a.find(z=>z.id===id);if(!x)return;const act=b.dataset.fa;
+  if(act==="up"){const inp=card.querySelector("[data-fup]");const v=inp.value.trim();if(!v)return;x.ups=x.ups||[];x.ups.push({t:Date.now(),x:v.slice(0,400)});fulStore(a)}
+  else if(act==="delup"){x.ups.splice(+b.dataset.i,1);fulStore(a)}
+  else if(act==="snap"){FUL_OPEN[id]=!FUL_OPEN[id]}
+  else if(act==="edit"){FUL_EDIT=id}
+  else if(act==="cancel"){FUL_EDIT=""}
+  else if(act==="save"){x.mrn=card.querySelector('[data-fe="mrn"]').value.trim().slice(0,24);x.note=card.querySelector('[data-fe="note"]').value.trim().slice(0,600);FUL_EDIT="";fulStore(a)}
+  else if(act==="del"){FUL_DEL=id}
+  else if(act==="delno"){FUL_DEL=""}
+  else if(act==="del2"){FUL_DEL="";fulStore(a.filter(z=>z.id!==id))}
+  else if(act==="fuv"){try{qnShow("quick");const box=$("fuBox");if(box)box.style.display="";$("fuPrev").value=x.snap;const d=new Date(x.t);$("fuDate").value=new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10);$("fuUse").click();notify("Follow-up visit: dictate today's comment.")}catch(err){}return}
+  fulDraw()})}}
+/* ---------- "📌 Follow-up" at the end of the notes ---------- */
+function fulAsk(mode){try{const anchor=mode==="quick"?$("qnCopy").closest(".btns"):$("copy").closest(".btns");let box=$("fulAsk_"+mode);if(box){box.remove();return}
+ const text=mode==="quick"?(()=>{try{const B=(typeof QAI!=="undefined"&&QAI.B)||(qnLast&&qnLast.B);return B?qnText(B):""}catch(e){return ""}})():(()=>{try{return noteText()}catch(e){return ""}})();
+ if(!String(text).trim()){try{notify("Write the note first.")}catch(e){}return}
+ anchor.insertAdjacentHTML("afterend",`<div id="fulAsk_${mode}" class="fulBox noprint"><b>📌 Add this patient to the follow-up list</b><div class="mini">${esc(fulTitle(text)||"current note")}</div>
+ <div style="display:grid;grid-template-columns:minmax(110px,160px) 1fr;gap:8px;margin-top:6px"><input id="fulAskM_${mode}" placeholder="MRN (optional)" inputmode="numeric" autocomplete="off"><input id="fulAskN_${mode}" placeholder="What to follow up (e.g. culture result, CT report, wound check)" autocomplete="off"></div>
+ <div class="btns" style="margin-top:6px"><button type="button" class="b sm" id="fulAskOk_${mode}">Add to the list</button><button type="button" class="b sm ghost" id="fulAskNo_${mode}">Cancel</button><span class="mini">The MRN stays only in this browser.</span></div></div>`);
+ $("fulAskOk_"+mode).onclick=()=>{fulAdd({mrn:$("fulAskM_"+mode).value,note:$("fulAskN_"+mode).value,src:"note",title:fulTitle(text),snap:text});$("fulAsk_"+mode).remove();try{notify("Added to the follow-up list.")}catch(e){}};
+ $("fulAskNo_"+mode).onclick=()=>$("fulAsk_"+mode).remove();setTimeout(()=>{try{$("fulAskM_"+mode).focus()}catch(e){}},30)}catch(e){console.warn("fulAsk",e)}}
+{const c=$("qnCopy");if(c&&!$("fulQ")){const row=c.closest(".btns");row.insertAdjacentHTML("beforeend",`<button type="button" class="b ghost" id="fulQ">📌 Follow-up</button>`);$("fulQ").onclick=()=>fulAsk("quick")}}
+{const c=$("copy");if(c&&!$("fulF")){const row=c.closest(".btns");row.insertAdjacentHTML("beforeend",`<button type="button" class="b ghost" id="fulF">📌 Follow-up</button>`);$("fulF").onclick=()=>fulAsk("form")}}
+setTimeout(fulBadge,600);
+try{GD["Follow-up list (📌 tab)"]=`<p>The <b>📌 Follow-up list</b> tab keeps patients you want to follow up until you delete them. Add any patient there with the MRN and a small note, or press <b>📌 Follow-up</b> at the end of a quick or regular note for your own patient. Add dated updates, open the note, or start a follow-up visit note. The MRN stays only in this browser.</p>`}catch(e){}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
