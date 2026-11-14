@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v258";
+const ER_VERSION="v261";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -21705,5 +21705,53 @@ function fulAsk(mode){try{const anchor=mode==="quick"?$("qnCopy").closest(".btns
 {const c=$("copy");if(c&&!$("fulF")){const row=c.closest(".btns");row.insertAdjacentHTML("beforeend",`<button type="button" class="b ghost" id="fulF">📌 Follow-up</button>`);$("fulF").onclick=()=>fulAsk("form")}}
 setTimeout(fulBadge,600);
 try{GD["Follow-up list (📌 tab)"]=`<p>The <b>📌 Follow-up list</b> tab keeps patients you want to follow up until you delete them. Add any patient there with the MRN and a small note, or press <b>📌 Follow-up</b> at the end of a quick or regular note for your own patient. Add dated updates, open the note, or start a follow-up visit note. The MRN stays only in this browser.</p>`}catch(e){}
+/* p287 (was p284 on the v260 branch) — Gaps between the paragraphs of MANAGEMENT (doctor's request 13 Nov 2026): every line in the MANAGEMENT section (each medicine / procedure line, nursing instructions, each advice line, the return advice) is separated from the next by one blank line, so the section reads as separate paragraphs in the app, in the copy for the EHR, on Telegram and in the saved note. Nothing is removed or reordered — blank lines are only added. Applies to the quick note, the Claude rewrite, addenda and the full form. */
+function mxSpaceL(L){try{if(!Array.isArray(L))return L;const mi=L.findIndex(z=>z&&z[1]==="h"&&z[0]==="MANAGEMENT");if(mi<0)return L;let e=mi+1;while(e<L.length&&L[e][1]!=="h")e++;
+ const body=L.slice(mi+1,e),out=[];body.forEach(z=>{if(!z||!String(z[0]||"").trim()){return}if(out.length)out.push(["",""]);out.push(z)});
+ if(e<L.length||body.length&&!String(body[body.length-1][0]||"").trim())out.push(["",""]);/* keep one blank before the next heading */
+ L.splice(mi+1,e-mi-1,...out)}catch(e){console.warn("p287",e)}return L}
+function mxSpaceT(t){try{const A=String(t).split("\n");const mi=A.findIndex(l=>l.trim()==="MANAGEMENT");if(mi<0)return t;let e=mi+1;while(e<A.length&&!(/^[A-Z][A-Z &]+$/.test(A[e].trim())&&A[e].trim().length>3))e++;
+ const body=A.slice(mi+1,e).filter(l=>l.trim()),out=[];body.forEach(l=>{if(out.length)out.push("");out.push(l)});if(e<A.length)out.push("");A.splice(mi+1,e-mi-1,...out);return A.join("\n")}catch(e){return t}}
+{const _h=qnHTML;qnHTML=function(B,inline){try{if(B&&B.L)mxSpaceL(B.L)}catch(e){}return _h(B,inline)}}
+{const _t=qnText;qnText=function(B){try{if(B&&B.L)mxSpaceL(B.L)}catch(e){}return _t(B)}}
+{const _n=noteText;noteText=function(){const t=_n.apply(this,arguments);try{if(typeof _ntBusy!=="undefined"&&_ntBusy)return t}catch(e){}return mxSpaceT(t)}}
+/* p286 — Red eye: specific safety netting + the dictated eye diagnosis wins (doctor's request 13 Nov 2026, two brothers with red eye: no eye-specific return advice).
+ (1) RETURN ADVICE for every discharged red-eye / conjunctivitis / eye presentation (quick note, Claude rewrite, full form): the eye clause is always
+     "any change in eyesight or blurred vision, severe eye pain or pain when moving the eye, sensitivity to light, any discharge from the eye (or the discharge increases or becomes thick, yellow or green), increasing redness or swelling of the eyelids or around the eye, or no improvement within 2 to 3 days" — it replaces the short "reduced vision, severe pain or light sensitivity" and the full-form phrases; the rest of the line (carer wording, general clause, allergy clause) is kept.
+     A medicine given or prescribed for the eye (drops / ointment) also brings the allergic-reaction clause when it was missing.
+ (2) IMPRESSION: an eye diagnosis typed by the doctor (viral / allergic / bacterial conjunctivitis, subconjunctival hemorrhage, corneal abrasion, keratitis, uveitis, episcleritis, scleritis, blepharitis, stye, chalazion, acute angle-closure glaucoma, foreign body) is used instead of the guessed "Bacterial conjunctivitis". When no type was dictated, the type is taken only from what was dictated (sticky / pus → bacterial, itch → allergic, watery → viral; otherwise plain "Conjunctivitis"), not from the template examination line.
+ (3) The Claude prompt gets the same eye safety-netting rule. Additions / replacements of the eye clause only — nothing else in the note is changed. */
+const EYE_PRES=/\bred (?:left |right |both )?eyes?\b|\beyes? (?:is |are )?red(?:ness)?\b|\bredness (?:of|in) (?:the |both )?(?:left |right )?eyes?\b|conjunctiv|pink eye|sticky eyes?|eye discharge|discharge from the (?:left |right )?eye|subconjunctival|kerat(?:itis|o)|uveitis|iritis|episcleritis|scleritis|corneal abrasion|foreign body (?:in|of) the (?:left |right )?eye|blepharitis|\bstye\b|hordeolum|chalazion|glaucoma|eye pain|painful eye/i;
+const EYE_DX=[[/subconjunctival (?:hemorrhage|haemorrhage|bleed\w*)/,"Subconjunctival hemorrhage"],[/viral conjunctivitis/,"Viral conjunctivitis"],[/allergic conjunctivitis/,"Allergic conjunctivitis"],[/bacterial conjunctivitis/,"Bacterial conjunctivitis"],[/corneal abrasion/,"Corneal abrasion"],[/(?:corneal )?foreign body (?:in|of) the (?:left |right )?(?:eye|cornea)|corneal foreign body/,"Corneal foreign body"],[/(?:microbial |bacterial |herpe\w* )?keratitis/,null],[/anterior uveitis|uveitis|iritis/,"Anterior uveitis"],[/episcleritis/,"Episcleritis"],[/scleritis/,"Scleritis"],[/blepharitis/,"Blepharitis"],[/\bstye\b|hordeolum/,"Stye (hordeolum)"],[/chalazion/,"Chalazion"],[/(?:acute )?angle[- ]closure glaucoma|acute glaucoma/,"Acute angle-closure glaucoma"]];
+function eyeNeg(raw,re){const t=raw.toLowerCase();const g=new RegExp(re.source,"g");let m;while((m=g.exec(t))){const pre=t.slice(Math.max(0,m.index-25),m.index);if(!/\b(?:no|not|denies|without|nor|negative|rule out|r\/o|exclude\w*)\b[^.,;\n]*$/.test(pre))return true}return false}
+function eyeSide(raw){const t=raw.toLowerCase();const both=/both eyes|bilateral/.test(t);if(both)return "both eyes";const m=t.match(/\b(left|right)\b[^.,;]{0,25}\beye|\beye\b[^.,;]{0,12}\b(left|right)\b/);return m?(m[1]||m[2])+" eye":""}
+function eyeDictatedDx(raw){const t=raw.toLowerCase();for(const [re,name] of EYE_DX){if(!eyeNeg(t,re))continue;if(name)return name;const m=t.match(re);return m?m[0].replace(/^./,c=>c.toUpperCase()):null}return null}
+const EYE_RET_OLD=[/reduced vision, severe pain or light sensitivity;?\s*/i,/vision gets worse;?\s*/i,/eye pain becomes severe or light hurts the eye;?\s*/i,/no improvement in 3 days;?\s*/i,/blisters, peeling skin, sore mouth or eyes[^;]*;?\s*/i];
+function eyeRetClause(raw){const dis=eyeNeg(raw,/discharge(?!d)|sticky|pus\b|purulent|crust/);return `any change in eyesight or blurred vision, severe eye pain or pain when moving the eye, sensitivity to light, ${dis?"the discharge from the eye increases or becomes thick, yellow or green":"any discharge from the eye"}, increasing redness or swelling of the eyelids or around the eye, or no improvement within 2 to 3 days`}
+const EYE_ALG="any allergic reaction to the medicines given or prescribed (skin rash, itching, swelling of the lips, face or tongue, difficulty breathing or swallowing)";
+function eyeApply(B,raw){try{if(!B||!B.L||B.addendum)return B;raw=String(raw||"");const L=B.L;const txt=L.map(z=>z[0]||"").join("\n");
+ if(!EYE_PRES.test(raw)&&!/conjunctivitis|subconjunctival|keratitis|uveitis|red eye/i.test((L.find(z=>/^Impression:/.test(z[0]||""))||[""])[0]))return B;
+ /* (2) impression */
+ const ii=L.findIndex(z=>/^Impression:/.test(z[0]||""));
+ if(ii>=0){let imp=L[ii][0];const dx=eyeDictatedDx(raw);const sd=eyeSide(raw);const conjRe=/\b(?:Bacterial|Viral|Allergic) conjunctivitis\b|\bConjunctivitis\b/;
+  if(conjRe.test(imp)){let rep=null;
+   if(dx)rep=dx;
+   else if(!/conjunctivitis/i.test(raw)||!/(?:bacterial|viral|allergic) conjunctivitis/i.test(raw)){rep=eyeNeg(raw,/sticky|pus\b|purulent|yellow discharge(?!d)|green discharge(?!d)|crust|chloramphenicol|fusidic|fucithalmic|moxifloxacin|ofloxacin|ciprofloxacin|tobramycin|antibiotic (?:eye )?drops/)?"Bacterial conjunctivitis":eyeNeg(raw,/watery|watering|tearing/)?"Viral conjunctivitis":eyeNeg(raw,/itch/)?"Allergic conjunctivitis":eyeNeg(raw,/discharge(?!d)/)?"Bacterial conjunctivitis":"Conjunctivitis"}
+   if(rep){const m=imp.match(conjRe);const after=imp.slice(m.index+m[0].length);const hasSide=/^\s*\((?:left|right|both)[^)]*\)/i.test(after);imp=imp.slice(0,m.index)+rep+(!hasSide&&sd&&!/\((?:left|right|both)/i.test(rep)?` (${sd})`:"")+after;
+    if(imp!==L[ii][0]){(B.audit=B.audit||[]).push({fix:true,m:`impression changed to the dictated eye diagnosis "${rep}"`});L[ii][0]=imp}}}}
+ /* (1) return advice — only when discharged */
+ const discharged=L.some(z=>z[1]==="dis"||/was discharged|discharged home/i.test(z[0]||""))||/\bdischarged?\b|\bhome\b|follow[- ]?up|clinic/i.test(raw);
+ const ri=L.findIndex(z=>/advised to (?:return|bring (?:the child|him|her|them) back) immediately if:|^Advised to return immediately if:/i.test(z[0]||""));
+ if(ri<0||!discharged)return B;
+ /* only when the eye problem is the diagnosis (not red eyes as part of measles, Kawasaki, allergy etc.) */
+ {const im=ii>=0?L[ii][0]:"";const EYE_IMP=/conjunctiv|\beyes?\b|corneal|kerat|uveitis|iritis|scler|subconjunctival|blephar|stye|hordeolum|chalazion|glaucoma|ocular|periorbital|preseptal/i;if(im?!EYE_IMP.test(im):!EYE_PRES.test(raw))return B}
+ let line=L[ri][0];if(/sensitivity to light/.test(line)&&/pain when moving the eye/.test(line))return B;
+ EYE_RET_OLD.forEach(re=>{line=line.replace(re,"")});
+ line=line.replace(/(immediately if:)\s*/i,`$1 ${eyeRetClause(raw)}; `).replace(/;\s*;/g,";").replace(/;\s*\./,".").replace(/;\s*$/,".");
+ const eyeMed=/\b(?:eye ?drops?|eye ointment|chloramphenicol|fusidic|fucithalmic|moxifloxacin|ofloxacin|ciprofloxacin eye|tobramycin|tobradex|olopatadine|ketotifen|sodium cromoglicate|cromolyn|lubricant|artificial tears|prednisolone eye|atropine eye|cyclopentolate)\b/i;
+ if(eyeNeg(raw,eyeMed)&&!/allergic reaction/i.test(line))line=line.replace(/\.?\s*$/,`; ${EYE_ALG}.`);
+ L[ri][0]=line;if(!L[ri][1])L[ri][1]="ret"}catch(e){console.warn("p286",e)}return B}
+{const _a=auditApply;auditApply=function(B,raw){const R=_a(B,raw);try{eyeApply(R,raw)}catch(e){}return R}}
+{const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n",'RULES\n0e. Red eye / conjunctivitis / any eye presentation discharged home: the return advice must name these eye red flags: any change in eyesight or blurred vision, severe eye pain or pain when moving the eye, sensitivity to light, any discharge from the eye (or the discharge increases or becomes thick, yellow or green), increasing redness or swelling of the eyelids or around the eye, no improvement within 2 to 3 days. Use the eye diagnosis the doctor dictated (viral / allergic / bacterial conjunctivitis, subconjunctival hemorrhage, etc.); never change it to another type.\n')}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
