@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v264";
+const ER_VERSION="v265";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -21888,5 +21888,22 @@ setInterval(()=>{try{if(document.visibilityState==="visible"&&fsOn())fsSync(fals
 document.addEventListener("visibilitychange",()=>{try{if(document.visibilityState==="visible"&&fsOn()&&Date.now()-FS.last>60000)fsSync(false)}catch(e){}});
 try{const p=document.querySelector("#fulPanel p.mini");if(p)p.textContent="Patients to follow up. They stay here until you delete them. The MRN is never written in a note. The list stays on this device unless you turn on the encrypted sync below."}catch(e){}
 try{GD["Follow-up list sync (encrypted)"]=`<p>In the <b>📌 Follow-up list</b> tab choose a passphrase and type the same one on each device (Board sync must be on first). The list is encrypted on the device before it is sent, so the MRNs cannot be read by anyone without the passphrase. Changes and deletions follow you between the phone and the PC.</p>`}catch(e){}
+/* p291 — sync is AUTOMATIC: nothing to click. Board notes and the follow-up list are checked every 30 seconds while the page is open, and at once when the page is opened, comes back to the front, gets focus, comes back online, or the Board / Follow-up tab is opened. "Sync now" stays only as an extra.
+ Never interrupts typing: an automatic check is skipped while the cursor is in a box inside the Board or the Follow-up list. */
+const AS={every:30000,min:12000};
+function asTyping(){try{const a=document.activeElement;return !!(a&&/^(INPUT|TEXTAREA)$/.test(a.tagName)&&a.closest&&a.closest("#fulPanel,#qnBoardPanel,#qnBoard,#syBar,#fsBar"))}catch(e){return false}}
+function asRun(why){try{if(document.visibilityState!=="visible"||asTyping())return;if(typeof navigator!=="undefined"&&navigator.onLine===false)return;const now=Date.now();
+  if(typeof ghOn==="function"&&ghOn()&&!SY.busy&&now-SY.last>AS.min)syNow(false);
+  if(typeof fsOn==="function"&&fsOn()&&!FS.busy&&now-FS.last>AS.min)fsSync(false)}catch(e){}}
+setInterval(()=>asRun("timer"),AS.every);
+["focus","online","pageshow"].forEach(ev=>addEventListener(ev,()=>setTimeout(()=>asRun(ev),400)));
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible")setTimeout(()=>asRun("visible"),300)});
+document.addEventListener("click",e=>{try{const t=e.target.closest&&e.target.closest('[data-qtab="ful"],[data-qtab="board"]');if(t)setTimeout(()=>asRun("tab"),500)}catch(e){}},true);
+setTimeout(()=>asRun("load"),3500);
+/* say so on both bars */
+function asNote(){try{[["syBar",typeof ghOn==="function"&&ghOn()],["fsBar",typeof fsOn==="function"&&fsOn()]].forEach(([id,on])=>{const b=$(id);if(!b||!on||b.querySelector(".asN"))return;b.insertAdjacentHTML("beforeend",`<div class="asN mini" style="margin-top:3px;color:#2e7d32">✓ Automatic — checks every 30 seconds and whenever you open the page. No need to press anything.</div>`)})}catch(e){}}
+{const _a=syBar;syBar=function(){const r=_a.apply(this,arguments);asNote();return r}}
+{const _b=fsBar;fsBar=function(){const r=_b.apply(this,arguments);asNote();return r}}
+setTimeout(asNote,2500);
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
