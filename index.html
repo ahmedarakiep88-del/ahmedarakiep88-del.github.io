@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v265";
+const ER_VERSION="v266";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -21905,5 +21905,194 @@ function asNote(){try{[["syBar",typeof ghOn==="function"&&ghOn()],["fsBar",typeo
 {const _a=syBar;syBar=function(){const r=_a.apply(this,arguments);asNote();return r}}
 {const _b=fsBar;fsBar=function(){const r=_b.apply(this,arguments);asNote();return r}}
 setTimeout(asNote,2500);
+/* p292 — Complicated dictations (two or three complaints, several medicines, on-call + referrals). Found by the 12-scenario test of 15 Nov 2026 (tests/cases32.txt); doctor replied "go".
+ A final safety pass over every quick note (built-in writer and Claude's rewrite):
+  1 suicidal thoughts / self-harm that were dictated can never be dropped (history + impression);
+  2 medicines prescribed or "discharged on" that are missing from the note are written (one sentence); a dose cut at a decimal ("0.") is repaired; a medicine given with a time that was lost is written;
+  3 each ED medicine keeps ITS OWN dictated time; a time that was not dictated is not put on advice / plaster lines;
+  4 left / right always as dictated;
+  5 "refusing to walk / eat / feed" is a symptom, not a refusal of treatment;
+  6 an admitted patient gets no return advice; "accepted admission" / "advised admission" is written in the disposition;
+  7 "alert", "vitally stable", "well hydrated" are not written against what was dictated (drowsy, confused, postural drop, poor intake);
+  8 the impression names every dictated problem (fracture, UTI, chest pain, AF, liver disease, back pain, rust ring, glandular fever);
+  9 a medicine that was STOPPED is not written as given; a rash after an antibiotic is not notified as measles;
+ 10 history: when the dictation has "and also …", the presenting sentence uses the doctor's own words for all complaints; broken fragments are removed; past history said before "came with" is kept.
+ Only wrong or missing lines are touched. */
+const MC_ALSO=/\band also\b|\balso (?:has|have|had|complain\w*|c\/o|reports?|mention\w*)\b|\bas well as\b/i;
+const MC_ALG="any allergic reaction to the medicines given or prescribed (skin rash, itching, swelling of the lips, face or tongue, difficulty breathing or swallowing)";
+function mcPos(raw,re){const t=String(raw||"").toLowerCase();const g=new RegExp(re.source,"g");let m;while((m=g.exec(t))){const pre=t.slice(Math.max(0,m.index-40),m.index);if(!/\b(?:no|not|denies|denied|without|nor|negative for|rule out|r\/o|exclud\w*)\b[^.,;\n]*$/.test(pre))return m;if(m.index===g.lastIndex)g.lastIndex++}return null}
+function mcSec(L,name){const s=L.findIndex(z=>z[1]==="h"&&z[0]===name);if(s<0)return null;let e=s+1;while(e<L.length&&L[e][1]!=="h")e++;while(e>s+1&&!(L[e-1][0]||"").trim())e--;return {s,e}}
+function mcUnits(s){return String(s).replace(/(\d)\s*milligrams?\b/gi,"$1 mg").replace(/(\d)\s*micrograms?\b/gi,"$1 mcg").replace(/(\d)\s*kilograms?\b/gi,"$1 kg").replace(/(\d)\s*grams?\b/gi,"$1 g").replace(/(\d)\s*(?:milliliters?|millilitres?|ml)\b/gi,"$1 mL").replace(/(\d)\s*(?:centimeters?|centimetres?)\b/gi,"$1 cm").replace(/(\d)\s*(?:millimeters?|millimetres?)\b/gi,"$1 mm").replace(/(\d)\s*percent\b/gi,"$1%").replace(/\bper kilogram\b/gi,"per kg").replace(/\s+/g," ").trim()}
+function mcCap(s){s=String(s).trim();return s?s.charAt(0).toUpperCase()+s.slice(1):s}
+function mcRx(s){return String(s).replace(/[.*+?^${}()|[\]\\]/g,"\\$&")}
+function mcText(L){return L.map(z=>z[0]||"").join("\n")}
+function mcIns(L,secName,line,kind,where){let S=mcSec(L,secName);if(!S){/* create the section before DISCUSSION / DISPOSITION, else at the end */const order=["HISTORY","EXAMINATION","ASSESSMENT","INVESTIGATIONS","MANAGEMENT","DISCUSSION AND REFERRAL","DISPOSITION"];let at=L.length;for(let k=order.indexOf(secName)+1;k<order.length&&k>0;k++){const n=L.findIndex(z=>z[1]==="h"&&z[0]===order[k]);if(n>=0){at=n;while(at>0&&!(L[at-1][0]||"").trim())at--;break}}L.splice(at,0,["",""],[secName,"h"],[line,kind]);return}
+ let at=S.e;if(typeof where==="function"){const w=where(S);if(w>=0)at=w}L.splice(at,0,[line,kind])}
+/* Safari before 16.4 has no look-behind: split sentences without it */
+function mcSplitS(t){const out=[];let cur="";String(t).split(" ").forEach(w=>{cur+=(cur?" ":"")+w;if(/\.$/.test(w)){out.push(cur);cur=""}});if(cur)out.push(cur);return out}
+function mcDropSent(L,S,test,kinds){for(let i=S.e-1;i>S.s;i--){const z=L[i];if(kinds&&!kinds.test(z[1]||""))continue;const parts=mcSplitS(z[0]);const keep=parts.filter(p=>!test(p));if(keep.length!==parts.length){if(keep.length)z[0]=keep.join(" ");else L.splice(i,1)}}}
+function mcRawTime(t,word){const m=t.match(new RegExp("\\b"+mcRx(word)+"\\b(?:[^,;.\\n]|\\.(?=\\d))*?\\bat (\\d{1,2}:\\d{2})"));return m?m[1].replace(/^(\d):/,"0$1:"):null}
+function mcDrugWord(part,t){const ws=String(part).toLowerCase().match(/[a-z][a-z-]{3,}/g)||[];const skip=/^(?:orally|intravenous|intramuscular|subcutaneous|nebulized|nebuliser|nebulizer|given|were|three|times|twice|daily|bolus|unit|units|started|normal)$/;return ws.find(w=>!skip.test(w)&&t.includes(w))||ws.find(w=>t.includes(w))||null}
+const MC_PMH=[[/\bdiabet(?:ic|es)\b/,"diabetes mellitus",/diabet/i],[/\bhypertens(?:ive|ion)\b/,"hypertension",/hypertens/i],[/\bcopd\b|chronic obstructive/,"COPD",/copd|chronic obstructive/i],[/isch(?:a)?emic heart disease|\bihd\b|coronary artery disease/,"ischemic heart disease",/isch\w* heart|coronary/i],[/atrial fibrillation/,"atrial fibrillation",/atrial fibrillation/i],[/asthma/,"bronchial asthma",/asthma/i],[/hypothyroid/,"hypothyroidism",/hypothyroid/i],[/dementia/,"dementia",/dementia/i],[/\balcoholic\b|alcohol (?:abuse|excess|dependen\w+|use disorder)/,"alcohol use disorder",/alcohol use|alcohol depend|alcohol excess|alcoholic liver/i],[/epilep/,"epilepsy",/epilep/i],[/heart failure/,"heart failure",/heart failure/i],[/chronic kidney disease|\bckd\b/,"chronic kidney disease",/kidney disease|ckd|renal failure|dialysis/i],[/sickle cell/,"sickle cell disease",/sickle/i]];
+const MC_SPEC={obstetrics:"obstetrician",obstetric:"obstetrician",gynecology:"gynecologist",cardiology:"cardiologist",neurology:"neurologist",orthopedic:"orthopedic surgeon",orthopedics:"orthopedic surgeon",surgery:"surgeon",surgical:"surgeon",medical:"physician",medicine:"physician",pediatric:"pediatrician",pediatrics:"pediatrician",psychiatry:"psychiatrist",urology:"urologist",ent:"ENT doctor",ophthalmology:"ophthalmologist",gastroenterology:"gastroenterologist",nephrology:"nephrologist",neurosurgery:"neurosurgeon"};
+const MC_PARTS="leg|calf|thigh|knee|ankle|foot|hip|arm|forearm|wrist|hand|elbow|shoulder|eye|ear|flank|groin|kidney|testicle|testis|breast|finger|thumb|toe|lower limb|upper limb|lung";
+/* the final pass receives a cleaned copy of the dictation (times and some words removed): use the dictation box itself when it is the same case */
+function mcOrig(raw){try{const v=String(($("qnIn")&&$("qnIn").value)||"");const k=x=>String(x).toLowerCase().replace(/[^a-z0-9]/g,"").slice(0,14);if(v.length>=raw.length*0.6&&k(v)&&k(v)===k(raw))return v}catch(e){}return raw}
+function mcApply(B,raw){try{if(!B||!B.L||B.addendum||B.ff)return B;raw=mcOrig(String(raw||""));if(raw.length<40)return B;const t=raw.toLowerCase().replace(/\s+/g," ");const L=B.L;const fixes=[];const fx=m=>{fixes.push(m)};
+ const female=/\b(?:female|woman|girl|lady|she|her|pregnan\w+)\b/.test(t),male=/\b(?:male|man|boy|he|his)\b/.test(t);const Pron=female?"She":male?"He":"The patient",poss=female?"her":male?"his":"their";
+ const preamble=(t.split(/\b(?:came|comes|presented|presents|presenting|complain\w*)\b|\bc\/o\b/)[0]||"").slice(0,300);
+ const discharged=!!mcPos(t,/\bdischarged?\b/);
+ let H=mcSec(L,"HISTORY");
+ /* ---------- 10. history: all complaints in the doctor's words ---------- */
+ let rewritten=false;
+ if(H&&!B.ai&&MC_ALSO.test(raw)){let oi=-1;for(let i=H.s+1;i<H.e;i++)if(/presented today with /.test(L[i][0]||"")){oi=i;break}
+  let clause=null,after=false;const cm=raw.match(/(?:\b(?:came|comes|presented|presents|presenting|complain(?:s|ing|ed)?)(?: to (?:the )?(?:ED|ER|emergency))?(?: today)?\s+(with|of|after|because of)|\bc\/o())\s+((?:[^,.;\n]|\.(?=\d))+)/i);
+  if(cm&&MC_ALSO.test(cm[3])){clause=cm[3];after=/after/i.test(cm[1]||"")}
+  else{const fm=raw.match(/\bfell ((?:from|off|down|on|at)\b(?:[^,.;\n]|\.(?=\d))+)/i);if(fm&&MC_ALSO.test(fm[1])){clause="a fall "+fm[1];after=true}}
+  if(oi>=0&&clause){clause=mcUnits(clause).replace(/\s+and also\s+/gi,", and also ").replace(/(\w+) (no \w)/g,(a,b,c)=>/^(?:with|and|or|but)$/i.test(b)?a:b+", "+c).replace(/\bc\/o\b/gi,"complaining of").replace(/\s+,/g,",");
+   const pre=L[oi][0].slice(0,L[oi][0].indexOf("presented today with ")+"presented today ".length);L[oi][0]=pre+(after?"after ":"with ")+clause.replace(/[.\s]+$/,"")+".";rewritten=true;fx("presenting sentence rewritten in the dictated words (several complaints)")}
+  /* broken fragments left by the single-complaint parser */
+  H=mcSec(L,"HISTORY");
+  for(let i=H.e-1;i>H.s;i--){const x=L[i][0]||"";if(i===oi)continue;
+   if((rewritten&&/^The pain started after /.test(x)&&!/pain started after/.test(t))||/^With \w+ brought /.test(x)||(/\band also\b/.test(x)&&x.length<90&&L[i][1]==="pos")||/^Under observation\b/.test(x)||/^(?:PICU|ICU|NICU) informed\.?$/i.test(x)){L.splice(i,1);continue}
+   if(/hitting (?:his|her) head with vo\.$/.test(x))L[i][0]=x.replace(/ with vo\.$/,".")}
+  H=mcSec(L,"HISTORY");mcDropSent(L,H,p=>!/presented today/.test(p)&&(/\band also\b/.test(p))||/(?:complaining of|c\/o)\b/i.test(p)||/^No plan\.$/.test(p),/^(?:neg|pos)$/);
+  for(let i=H.s+1;i<mcSec(L,"HISTORY").e;i++)L[i][0]=String(L[i][0]).replace(/No tendon injury distal\./,"No tendon injury.")}
+ /* parentheses that swallowed the next complaint */
+ L.forEach(z=>{if(z[1]!=="h"&&/\([^)]* and also [^)]*\)/.test(z[0]||""))z[0]=z[0].replace(/\(([^)]*?) and also [^)]*\)/g,"($1)")});
+ /* ---------- past history dictated before "came with" ---------- */
+ H=mcSec(L,"HISTORY");
+ if(H){const ht=L.slice(H.s+1,H.e).map(z=>z[0]).join("\n");const add=[];MC_PMH.forEach(([re,label,have])=>{const m=preamble.match(re)||t.match(new RegExp("\\bknown (?:case of |to have )?(?:[a-z]+ (?:and |, )?){0,3}?(?:"+re.source+")"));if(!m)return;const pmhLine=L.slice(H.s+1,H.e).find(z=>/Past medical history:/.test(z[0]||""));if(pmhLine&&have.test(pmhLine[0]))return;if(!pmhLine&&have.test(ht.replace(/^.*presented today.*$/m,"")))return;add.push(label)});
+  if(add.length){let done=false;for(let i=H.s+1;i<H.e&&!done;i++){const x=L[i][0]||"";
+    if(/Past medical history: /.test(x)){L[i][0]=x.replace(/(Past medical history: [^.]*)\./,(a,b)=>b+", "+add.join(", ")+".");done=true}
+    else if(/No past medical history\./.test(x)){L[i][0]=x.replace(/No past medical history\./,"Past medical history: "+add.join(", ")+".");L[i][1]="pos";done=true}}
+   if(!done)mcIns(L,"HISTORY","Past medical history: "+add.join(", ")+".","pos",S=>{for(let i=S.s+1;i<S.e;i++)if(/past surgical history|No known drug allerg|Allergic to/i.test(L[i][0]||""))return i;return -1});
+   fx("past history added: "+add.join(", "))}}
+ /* ---------- 1. suicidal thoughts ---------- */
+ const SI=/suicid\w*|thoughts? of (?:ending|taking) (?:her|his|their|my|the) (?:own )?life|wants? to (?:die|end (?:her|his|their) life)|self[- ]harm|intentional overdose|tried to kill/;
+ const si=mcPos(t,SI);
+ if(si){const noPlan=/\bno (?:plan|intent)/.test(t.slice(si.index,si.index+120));const low=/low mood|depress/.test(t);const dm=t.slice(si.index,si.index+90).match(/for (?:the )?(?:last |past )?(\d+ (?:days?|weeks?|months?))/);
+  if(!/suicid|ending (?:her|his|their) life|self-harm|self harm/i.test(mcText(L))){mcIns(L,"HISTORY",`${Pron} reported ${low?"low mood and ":""}thoughts of ending ${poss} life${dm?" for the last "+dm[1]:""}${noPlan?"; no plan was reported":""}.`,"pos",S=>{for(let i=S.s+1;i<S.e;i++)if(L[i][1]==="neg"||/Past medical history|past surgical/i.test(L[i][0]||""))return i;return -1});fx("suicidal thoughts were dictated and were missing — written in the history")}
+  const ii=L.findIndex(z=>/^Impression:/.test(z[0]||""));if(ii>=0&&!/suicid|self-harm/i.test(L[ii][0])){L[ii][0]=L[ii][0].replace(/\.?\s*$/,`; ${low?"low mood with ":""}suicidal ideation${noPlan?" (no plan reported)":""}.`);fx("suicidal ideation added to the impression")}
+  (B.audit=B.audit||[]).push({m:"Suicidal thoughts were dictated: document the risk assessment (plan, intent, protective factors) and the psychiatric plan."})}
+ /* ---------- 5. refusing to walk / eat is a symptom ---------- */
+ {const all=t.match(/refus\w*/g)||[];const sym=t.match(/refus\w*(?: to)? (?:walk|bear weight|weight[- ]bear|stand|move|use (?:the|his|her)|feed|feeds|eat|drink|suck|breastfeed|play|food|milk|bottle)\w*(?: [a-z]+){0,3}/g)||[];
+  if(all.length&&all.length===sym.length){let rm=false;for(let i=L.length-1;i>=0;i--)if(L[i][1]==="refz"||/^The patient refused (?:walk|feed|eat|drink|stand|move|food|milk)/i.test(L[i][0]||"")){L.splice(i,1);rm=true}
+   if(!/refus/i.test(mcText(L))){const s=sym[0].replace(/\s+(?:and|with|for|since|temperature|heart|pulse)\b.*$/,"");mcIns(L,"HISTORY",mcCap(s.replace(/^refus\w*/,"Refusing"))+".","pos",S=>{for(let i=S.s+1;i<S.e;i++)if(L[i][1]==="neg")return i;return -1})}
+   if(rm)fx("\"refusing to walk / eat\" is a symptom — the refusal-of-treatment sentence was removed")}}
+ /* ---------- 6. on-call wording, admission, no return advice when admitted ---------- */
+ H=mcSec(L,"HISTORY");
+ if(H)for(let i=H.e-1;i>H.s;i--){const x=L[i][0]||"";const m=x.match(/^(\w+) on call\s*and advised (.+?) at (\d{1,2}:\d{2})\.$/i);
+  if(m){L.splice(i,1);const sp=MC_SPEC[m[1].toLowerCase()]||(m[1].toLowerCase()+" doctor");mcIns(L,"DISCUSSION AND REFERRAL",`The on-call ${sp} reviewed the patient at ${m[3]} and advised ${m[2]}.`,"");fx("on-call review moved to DISCUSSION AND REFERRAL");continue}
+  const r=x.match(/^The patient was reviewed in the ED at (\d{1,2}:\d{2})\.$/);if(r&&new RegExp("on[- ]call[^,.;]{0,40}(?:contacted|reviewed|informed|called)[^,.;]{0,12} at 0?"+r[1].replace(/^0/,"")).test(t)){L.splice(i,1);fx("the on-call time was not the ED review time — line removed")}}
+ const accepted=/accepted (?:the patient |for )?(?:for )?admission|accepted the patient|will admit|to be admitted|for admission under/.test(t),advAdm=/advised (?:for )?admission|advised to admit/.test(t);
+ {const D=mcSec(L,"DISCUSSION AND REFERRAL");if(D)for(let i=D.e-1;i>D.s;i--){let x=L[i][0]||"";
+   if(/on call contacted accepted admission/i.test(x)){L.splice(i,1);continue}
+   if(accepted&&/EEG|Holter/.test(x)&&!/\beeg\b|holter/.test(t)){x=x.replace(/ regarding possible admission for further assessment, including an EEG and 24-hour Holter monitoring to rule out an arrhythmia/,accepted?" and accepted the patient for admission":"");fx("EEG / Holter were not dictated — removed from the on-call line")}
+   x=x.replace(/ \(, (?:picu|icu|nicu) informed\)/i,"");L[i][0]=x}
+  const pm=t.match(/\b(picu|nicu|icu)(?: team)? (?:was |were )?(?:informed|contacted|aware)/);if(pm&&!new RegExp(pm[1]+" team was informed","i").test(mcText(L))&&!/intensivist was contacted/i.test(mcText(L)))mcIns(L,"DISCUSSION AND REFERRAL",`The ${pm[1].toUpperCase()} team was informed.`,"")}
+ {const di=L.findIndex(z=>/^Disposition as per the on-call ([a-z ]+?)'s review/.test(z[0]||""));if(di>=0&&!discharged){const who=L[di][0].match(/the on-call ([a-z ]+?)'s review/)[1];
+   if(accepted){L[di]=[`The patient was accepted for admission by the on-call ${who}.`,"dis"];fx("\"accepted admission\" written in the disposition")}
+   else if(advAdm){const why=(t.match(/advised (?:for )?admission (for [^,.;]+)/)||[])[1];L[di]=[`Admission was advised by the on-call ${who}${why?" "+why.replace(/\btia\b/,"TIA"):""}.`,"dis"];fx("\"advised admission\" written in the disposition")}}
+  L.forEach(z=>{if(z[1]==="dis"&&/ and awaiting the results of the investigations/.test(z[0])&&!/pending|await\w* (?:the )?(?:result|lab|blood|ct|x-?ray|troponin|culture|report)/.test(t))z[0]=z[0].replace(/ and awaiting the results of the investigations/,"")})}
+ const admittedNote=L.some(z=>/\bwas admitted\b|accepted for admission|Admission was advised/.test(z[0]||""));
+ if(admittedNote&&!discharged){let rm=false;for(let i=L.length-1;i>=0;i--){const x=L[i][0]||"";if(/advised to (?:return|bring (?:the )?(?:child|patient|him|her|them) back) immediately/i.test(x)){L.splice(i,1);rm=true}else if(/all advice and the return instructions were explained/.test(x))L[i][0]=x.replace(/all advice and the return instructions were explained/,"the diagnosis and the plan of admission were explained")}
+  if(rm)fx("admitted patient — return advice removed")}
+ /* ---------- 9. stopped medicine is not "given"; measles handled in ndDetect ---------- */
+ {const re=/\b([a-z]{5,}) (?:was |has been |were )?(?:stopped|discontinued|withheld)\b/g;let m;while((m=re.exec(t))){const D=m[1];const gi=L.findIndex(z=>new RegExp("^"+mcRx(D)+"\\b.*\\b(?:was|were) given","i").test(z[0]||""));if(gi<0)continue;
+   if(new RegExp("(?:given|administered|received)[^,;.]*\\b"+mcRx(D)+"\\b|\\b"+mcRx(D)+"\\b[^,;.]*\\b(?:given|administered)").test(t))continue;
+   L.splice(gi,1);const ni=L.findIndex(z=>/^Nursing instructions:/.test(z[0]||""));if(ni>=0){let n=L[ni][0].replace(new RegExp("after "+mcRx(D)+" — .*?(?=; after [A-Za-z -]+ — |\\. Document)","i"),"").replace(/Nursing instructions: ; /,"Nursing instructions: ").replace(/; ;/g,";").replace(/; \. Document/,". Document");if(/^Nursing instructions: \.? ?Document/.test(n))L.splice(ni,1);else L[ni][0]=n}
+   if(!new RegExp(mcRx(D)+"[^.]*stopped","i").test(mcText(L)))mcIns(L,"MANAGEMENT",mcCap(D)+" was stopped.","med",S=>S.s+1);fx(D+" was stopped, not given — corrected")}}
+ /* ---------- 3. each medicine keeps its own time ---------- */
+ {const M=mcSec(L,"MANAGEMENT");if(M)for(let i=M.s+1;i<M.e;i++){const x=L[i][0]||"";const m=x.match(/^(.+?) (was|were) (given|started) at (\d{1,2}:\d{2})\.$/);
+   if(m){const T=m[4].replace(/^(\d):/,"0$1:");const parts=m[1].split(/, | and /).filter(Boolean);
+    if(parts.length===1){const w=mcDrugWord(parts[0],t);if(w){const rt=mcRawTime(t,w);if(rt&&rt!==T){L[i][0]=`${m[1]} ${m[2]} ${m[3]} at ${rt}.`;fx(`time of ${w} corrected to the dictated ${rt}`)}else if(!rt&&(t.includes(T)||t.includes(T.replace(/^0/,"")))){L[i][0]=`${m[1]} ${m[2]} ${m[3]}.`;fx(`${w}: no time was dictated — borrowed time removed`)}}}
+    else{/* group by dictated time */const tm=parts.map(p=>{const w=mcDrugWord(p,t);return w?mcRawTime(t,w):null});const known=[...new Set(tm.filter(Boolean))];
+     if(known.length>1){const groups=[];parts.forEach((p,k)=>{const tt=tm[k]||null;const g=groups.find(q=>q.t===tt);if(g)g.p.push(p);else groups.push({t:tt,p:[p]})});
+      /* a part with no time of its own goes with its neighbour */const out=groups.map(g=>{const names=g.p.join(" and ");return names+(g.t?" at "+g.t:"")});
+      let s=out[0].replace(/ at (\d{1,2}:\d{2})$/,(a,b)=>` ${groups[0].p.length>1?"were":"was"} given at ${b}`);if(!/ given at /.test(s))s+=` ${groups[0].p.length>1?"were":"was"} given`;
+      L[i][0]=s+(out.length>1?" and "+out.slice(1).join(" and "):"")+".";fx("each medicine written with its own dictated time")}}}
+   /* a time that was not dictated on advice / plaster lines */
+   const a=x.match(/^(.*(?:advice was given|should stay with (?:him|her|the patient|them) for the first 24 hours|was checked before and after and was intact)) at (\d{1,2}:\d{2})\.$/);if(a&&!t.includes(a[2])&&!t.includes(a[2].replace(/^0/,"")))L[i][0]=a[1]+"."}}
+ /* ---------- 2. prescriptions and lost ED medicines ---------- */
+ {const UNIT="(?:[^,;\\n.]|\\.(?=\\d))";const clauses=[];let m;
+  const r1=new RegExp("\\bdischarged? (?:home )?(?:on|with)\\s+("+UNIT+"+)","gi");while((m=r1.exec(raw)))clauses.push({c:m[1],dis:true});
+  const r2=new RegExp("(?:^|[,;.\\n])\\s*("+UNIT+"*?)\\s*\\b(?:was |were |is |are )?prescribed\\b("+UNIT+"*)","gi");while((m=r2.exec(raw))){const c=(m[1]+" "+m[2]).trim();if(c&&!/^\s*(?:no|not)\b/i.test(c))clauses.push({c,dis:false})}
+  clauses.forEach(({c,dis})=>{c=mcUnits(c.split(/\s+and (?:advised|referred|referral|follow|to follow|sick leave|instructed|counsel\w*|given advice)\b/i)[0]).replace(/^(?:the patient |patient |he |she )?(?:was |were )?(?:given |on )?/i,"").replace(/[.\s]+$/,"");if(c.length<5||!/[a-z]{4,}/i.test(c)||!/\d ?(?:mg|g|mcg|mL|units?|%)\b|\bdaily\b|\btimes\b|ointment|drops|tablets?|cream|inhaler|syrup|capsules?|\bfor \d+ days/i.test(c))return;
+   const names=c.split(/\s+and\s+|\s+then\s+|,\s*/).map(p=>(p.trim().match(/^([A-Za-z][A-Za-z-]{3,})/)||[])[1]).filter(Boolean).filter(n=>!/^(?:once|twice|three|four|daily|days|weeks|times|oral|orally|tablet|tablets|drops|ointment|cream|every|home|regular|stable|advice|instructions|sick|isolation|leave|follow|referral)$/i.test(n));if(!names.length)return;
+   const di=L.findIndex(z=>z[1]==="dis"&&/discharged/.test(z[0]||""));const broken=di>=0&&/ on [^.]*\d\.$/.test(L[di][0])&&/\d\.\d/.test(c);
+   const nt=mcText(L).toLowerCase();const missing=names.filter(n=>!nt.includes(n.toLowerCase()));
+   if(!missing.length&&!broken)return;
+   if(broken)L[di][0]=L[di][0].replace(/ on [^.]*\d\.$/,".");
+   mcIns(L,"MANAGEMENT",(dis?"Discharge medicines: ":"Prescribed: ")+c+".","med",S=>{let at=S.s+1;for(let i=S.s+1;i<S.e;i++)if(/\b(?:was|were) (?:given|started|stopped)\b/.test(L[i][0]||"")&&!/advice|sick leave/i.test(L[i][0]))at=i+1;return at});
+   fx("medicines that were dictated and missing are written: "+c);
+   const ri=L.findIndex(z=>/advised to (?:return|bring (?:the )?(?:child|patient|him|her|them) back) immediately if:/i.test(z[0]||""));if(ri>=0&&!/allergic reaction/i.test(L[ri][0]))L[ri][0]=L[ri][0].replace(/\.?\s*$/,`; ${MC_ALG}.`)});
+  /* a medicine given with a time that never reached the note */
+  const M=mcSec(L,"MANAGEMENT");const mt=(M?L.slice(M.s+1,M.e).map(z=>z[0]).join("\n"):"").toLowerCase();
+  const r3=/\b((?:[a-z][a-z-]+ ){1,3})(\d+(?:\.\d+)? ?(?:percent|%|milligrams?|mg|grams?|g|ml|milliliters?|units?|micrograms?|mcg)\b(?:[^,;.\n]|\.(?=\d))*?)\s*\bat (\d{1,2}:\d{2})/g;
+  while((m=r3.exec(t))){let name=m[1].trim().split(" ");while(name.length&&/^(?:treated|with|given|and|received|then|of|on|the|was|were|iv|im|at|repeat|started|by|after|also|orally|stat|a|an|to|for|is)$/.test(name[0]))name.shift();if(!name.length)continue;
+   if(/saturation|oxygen|pressure|rate|glucose|temperature|hemoglobin|haemoglobin|platelets?|creatinine|potassium|sodium|lactate|troponin|sugar|pulse|score|weeks?|days?|hours?|years?|old/.test(name.join(" ")))continue;
+   {const T0=m[3].replace(/^(\d):/,"0$1:");if(M&&L.slice(M.s+1,M.e).some(z=>{const x=(z[0]||"").toLowerCase();return /\b(?:was|were) (?:given|started)\b/.test(x)&&!/^nursing/.test(x)&&name.some(w=>w.length>3&&x.includes(w))&&(x.includes(T0)||!/\d{1,2}:\d{2}/.test(x))}))continue}const dose=mcUnits(m[2]).replace(/\s*(?:was |were )?given\s*$/,"").replace(/\biv\b/g,"IV").replace(/\bim\b/g,"IM");
+   mcIns(L,"MANAGEMENT",`${mcCap(name.join(" "))} ${dose} was given at ${m[3].replace(/^(\d):/,"0$1:")}.`,"",S=>S.s+1);fx(`${name.join(" ")} (given at ${m[3]}) was missing — written`)}}
+ /* ---------- 4. left / right as dictated ---------- */
+ {const re=new RegExp("\\b(left|right) ("+MC_PARTS+")\\b","gi");L.forEach(z=>{if(z[1]==="h"||z[1]==="ret")return;z[0]=String(z[0]||"").replace(re,(a,s,p)=>{const sl=s.toLowerCase(),pl=p.toLowerCase(),o=sl==="left"?"right":"left";if(t.includes(sl+" "+pl)||!t.includes(o+" "+pl))return a;fx(`side corrected: ${o} ${pl} (as dictated)`);return (s[0]===s[0].toUpperCase()?mcCap(o):o)+" "+p})})}
+ /* ---------- 7. general state / vitals against the dictation ---------- */
+ {const gi=L.findIndex(z=>/^General: /.test(z[0]||""));if(gi>=0){let g=L[gi][0];const awake=mcPos(t,/\balert\b|gcs (?:of )?15|fully conscious|back to (?:normal|baseline)|recovered fully/);const drowsy=!awake&&mcPos(t,/\bdrowsy\b|\blethargic\b|\bobtunded\b/),conf=!awake&&mcPos(t,/confus\w+ more than usual|(?:is|still|remains|looks|appears) confused|new confusion|acute confusion|increasing confusion|gcs (?:of )?(?:1[0-4]|[3-9])\b/),dry=mcPos(t,/reduced oral intake|poor oral intake|dehydrat\w*|not drinking|dry mucous|standing \d+ over/);
+   if(drowsy&&/alert/.test(g)){g=g.replace(/alert/,drowsy[0]).replace(/, well-looking, not in distress/,"");L[gi][1]="pos"}else if(conf&&/alert/.test(g)&&!/confus/.test(g)){g=g.replace(/alert/,/more than usual/.test(conf[0])?"confused, more than usual":"confused").replace(/, well-looking, not in distress/,"");L[gi][1]="pos"}
+   if(dry)g=g.replace(/, well hydrated/,"").replace(/well-looking, /,"");if(g!==L[gi][0]){L[gi][0]=g.replace(/,\s*\./,".");fx("\"General\" line corrected to match the dictation")}}
+  const pv=t.match(/lying (\d{2,3})(?: over |\/)(\d{2,3})(?: and)? standing (\d{2,3})(?: over |\/)(\d{2,3})/);if(pv){const vi=L.findIndex(z=>/^The patient is vitally stable\.$/.test(z[0]||""));if(vi>=0){L[vi]=[`Vital signs: BP lying ${pv[1]}/${pv[2]}, standing ${pv[3]}/${pv[4]} (postural drop).`,"pos"];for(let i=L.length-1;i>=0;i--)if(/^Blood pressure lying \d/.test(L[i][0]||""))L.splice(i,1);fx("postural drop written in the vital signs instead of \"vitally stable\"")}}
+  /* examination findings dictated and missing */
+  const E=mcSec(L,"EXAMINATION");if(E){const et=L.slice(E.s+1,E.e).map(z=>z[0]).join("\n").toLowerCase();
+   raw.split(/[,;\n]|\.(?!\d)/).map(s=>s.trim()).forEach(seg=>{const sl=seg.toLowerCase();
+    if(/^(?:left|right|both) (?:wrist|ankle|knee|hip|leg|arm|forearm|elbow|shoulder|hand|foot|finger|thumb|toe|calf|thigh)s?\b[a-z ]{0,14}\b(?:swollen|tender|shortened|deformed|bruised|warm|red)\b/.test(sl)&&!et.includes(sl.split(" ").slice(0,3).join(" "))){mcIns(L,"EXAMINATION",mcCap(mcUnits(seg)).replace(/[.\s]*$/,"")+".","pos");fx("examination finding added as dictated: "+seg)}
+    else if(/^(?:maculopapular|purpuric|petechial|vesicular|urticarial|non[- ]?blanching)[a-z -]* rash\b/.test(sl)&&!/rash/.test(et)){mcIns(L,"EXAMINATION","Skin: "+sl.replace(/[.\s]*$/,"")+".","pos");fx("rash added to the examination")}
+    else if(/^neck stiffness (?:present|positive)$/.test(sl)&&!/neck stiffness (?:present|positive)/.test(et)){mcIns(L,"EXAMINATION","Neck stiffness present.","pos")}})}}
+ /* ---------- 8. impression names every dictated problem ---------- */
+ {const ii=L.findIndex(z=>/^Impression:/.test(z[0]||""));if(ii>=0){let imp=L[ii][0];const add=p=>{imp=imp.replace(/\.?\s*$/,"; "+p+".");fx("impression: added "+p)};
+   if(mcPos(t,/fracture/)&&!/fracture/i.test(imp)){const xl=L.find(z=>/^X-ray of the ([^:]+): (.*fracture[^.]*)\./i.test(z[0]||""));if(xl){const m=xl[0].match(/^X-ray of the ([^:]+): (.*fracture[^.]*)\./i);if(!/^no /i.test(m[2]))add(`${m[2].toLowerCase()} (${m[1]})`)}}
+   if(/nitrite positive|positive nitrite|leukocytes? positive/.test(t)&&mcPos(t,/burning micturition|dysuria|burning urine|frequency of urin/)&&!/urin|uti\b|urosepsis|pyelo|cystitis/i.test(imp))add("urinary tract infection"+(/pregnan/.test(t)?" in pregnancy":""));
+   if(MC_ALSO.test(raw)&&mcPos(t,/chest pain/)&&!/chest pain|coronary|angina|infarct|\bacs\b|pericard|pneumo|embol|costochond|musculoskeletal|dissection|aortic/i.test(imp))add("chest pain"+(/troponin (?:was |is )?negative/.test(t)&&/ecg[^,.;]{0,25}(?:normal|no st)/.test(t)?" with a normal ECG and negative troponin":""));
+   if(/ecg[^,.;]{0,30}atrial fibrillation/.test(t)&&!/atrial fibrillation/i.test(imp))add("atrial fibrillation on ECG");
+   const liver=mcPos(t,/yellow eyes|jaundice|icter/)&&/shifting dullness|ascites/.test(t);
+   if(liver&&/hematemesis|vomiting blood|melena|black stool/.test(t)&&!/liver|cirrho|varice/i.test(imp))add("jaundice and ascites suggesting chronic liver disease (variceal bleeding to be considered)");
+   if(liver){const Hh=mcSec(L,"HISTORY");if(Hh)mcDropSent(L,Hh,p=>/^No known liver disease\.$/.test(p),/^neg$/)}
+   if(MC_ALSO.test(raw)&&mcPos(t,/back pain/)&&!/back|sciatic|cord|spinal|disc|lumbar|cauda/i.test(imp))add("low back pain"+(/no weakness|power 5\/5/.test(t)?" with no neurological deficit":""));
+   if(/\(removed\)/.test(imp)&&!/(?:was|were) removed|removed (?:with|using|by|under)|foreign body removed/.test(t)){imp=imp.replace(/Corneal foreign body \(removed\) with a small corneal abrasion/,/rust ring/.test(t)?"Corneal abrasion with a rust ring":"Corneal foreign body with a small corneal abrasion").replace(/ \(removed\)/,"");fx("impression: \"removed\" was not dictated")}
+   if(/rust ring/.test(t)&&!/rust/i.test(imp))add("rust ring");
+   if(/monospot (?:test )?(?:is |was )?positive|positive monospot|glandular fever|infectious mononucleosis/.test(t)&&!/mononucleosis|glandular/i.test(imp)){const m=imp.match(/Acute exudative tonsillitis|Acute tonsillitis|Acute pharyngitis|Tonsillitis/);const rep="Infectious mononucleosis (glandular fever), monospot positive"+(/exudat/.test(t)?", with exudative tonsillitis":"");if(m)imp=imp.replace(m[0],rep);else add(rep.replace(/^I/,"i"));fx("impression: glandular fever (monospot positive)");
+    const ci=L.findIndex(z=>/^Centor score/.test(z[0]||""));if(ci>=0&&!/Monospot/.test(L[ci][0]))L[ci][0]=L[ci][0].replace(/\.?\s*$/,". Monospot positive: glandular fever is the likely cause, so antibiotics are not indicated (amoxicillin and ampicillin cause a rash).")}
+   /* a list of symptoms in front of the diagnosis */
+   {const body=imp.replace(/^Impression:\s*/,"").replace(/\.\s*$/,"");const items=body.split(/;\s*/);const symRe=/^(?:(?:left |right )?(?:flank|abdominal|chest|back|lower abdominal) pain(?: \([^)]*\))?|vomiting|nausea|fever|blood in the urine|hematuria|diarrhea)$/i;const keep=items.filter(x=>!symRe.test(x.trim()));if(keep.length&&keep.length<items.length&&keep.some(x=>/colic|stone|fracture|infection|itis\b|thrombosis|injury|laceration/i.test(x)))imp="Impression: "+mcCap(keep.join("; "))+"."}
+   if(/metal sheet/.test(t))imp=imp.replace(/caused by a metal(?! sheet)/,"caused by a metal sheet");
+   L[ii][0]=imp}
+  /* Wells / ultrasound wording once the DVT is confirmed */
+  if(mcPos(t,/showed[^,;.]*(?:dvt|deep vein thrombosis|thrombus)/))L.forEach(z=>{if(/^Wells score for DVT/.test(z[0]||""))z[0]=z[0].replace(/: DVT (?:un)?likely.*$/,": DVT confirmed on Doppler ultrasound.")});
+  L.forEach(z=>{if(/: eD /.test(z[0]||""))z[0]=z[0].replace(/: eD /,": ").replace(/\bdvt\b/g,"DVT").replace(/^Ultrasound of/,/doppler/.test(t)?"Doppler ultrasound of":"Ultrasound of")})}
+ /* ---------- negatives that contradict the dictation ---------- */
+ {const Hh=mcSec(L,"HISTORY");if(Hh){const C=[[/^No recent immobilization, surgery or long travel\.$/,/long flight|long travel|long[- ]haul|immobili[sz]|recent surgery|bed ?rest|plaster cast/],[/^Not on anticoagulants\.$/,null],[/^No palpitations\.$/,/palpitation/],[/^No dizziness or presyncope\.$/,/dizz|near faint|presyncope|light[- ]?headed/],[/^No (?:nausea or )?vomiting\.$/,/vomit/],[/^No shortness of breath\.$/,/shortness of breath|breathless|dyspn/],[/^No drowsiness or lethargy\.$/,/drowsy|letharg/],[/^No drowsiness or confusion\.$/,/drowsy|confus/],[/^No jaundice\.$/,/jaundice|yellow eyes|icter/],[/^No abdominal distension or constipation\.$/,/distension|distended/],[/^No fracture\.$/,/showed[^,;.]*fracture(?! ?\w*no)/]];
+   const tP=t.split(/\b(?:return if|come back if|advised to return|to return if|safety net\w*|red flags?)\b/)[0];mcDropSent(L,Hh,p=>C.some(([neg,pos])=>neg.test(p)&&(pos?!!mcPos(tP,pos):/warfarin|apixaban|rivaroxaban|dabigatran|edoxaban|anticoagul/.test(preamble))),/^neg$/)}}
+ /* ---------- small wrong lines ---------- */
+ {const ri=L.findIndex(z=>/^Referral to (.+ clinic.*)\.$/.test(z[0]||""));if(ri>=0){const X=L[ri][0].match(/^Referral to (.+)\.$/)[1];for(let i=L.length-1;i>=0;i--){const m=(L[i][0]||"").match(/^The patient was referred to the (\w+) clinic for follow-up\.$/);if(m&&i!==ri&&X.toLowerCase().includes(m[1].toLowerCase()+" clinic"))L.splice(i,1)}
+   const r2=L.findIndex(z=>/^Referral to (.+ clinic.*)\.$/.test(z[0]||""));L[r2][0]="The patient was referred to the "+X.replace(/^the /i,"").replace(/ and (?!the )/g," and the ")+" for follow-up."}
+  if(L.some(z=>/^The wound was closed with \d+ sutures/.test(z[0]||"")))for(let i=L.length-1;i>=0;i--)if(/^Sutured with \d+ sutures\b/.test(L[i][0]||""))L.splice(i,1);
+  L.forEach(z=>{if(z[1]!=="h"&&/\btia\b/.test(z[0]||""))z[0]=z[0].replace(/\btia\b/g,"TIA")})}
+ for(let i=L.length-1;i>=0;i--){const x=L[i][0]||"";
+  if(/^Paraspinal muscle tenderness and spasm/.test(x)&&!/back pain|paraspinal|spasm|lumbar|sciatica/.test(t)){L.splice(i,1);continue}
+  if(/advised to follow up with family medicine; an appointment is to be booked by the patient/.test(x)&&!/family medicine|primary care|\bgp\b|health cent/.test(t)&&/antenatal clinic|obstetric\w* clinic|early pregnancy (?:unit|clinic)/.test(t)){L.splice(i,1);continue}
+  if(/^Anti-D given\b/i.test(x)&&L.some(z=>/anti-D immunoglobulin was given/.test(z[0]||""))){L.splice(i,1);continue}
+  if(/^Nursing instructions:/.test(x))L[i][0]=x.replace(/after the anti-d vaccine/i,"after anti-D immunoglobulin");
+  if(/immediately if:/i.test(x)){let y=x;if(/heavy bleeding/.test(y))y=y.replace(/; any vaginal bleeding(?=;)/,"");
+   if(!/fall|fell|injur|trauma|fracture|sprain|wrist|ankle|\bleg\b|\barm\b|hip|knee|shoulder|hand|foot|limb|laceration|wound|cast|slab|dvt|calf/.test(t))y=y.replace(/; increasing pain or swelling, numbness, tingling, coldness or color change, unable to bear weight or use the limb(?=;|\.)/,"");
+   L[i][0]=y}}
+ /* ---------- advice that was dictated and lost ---------- */
+ {const re=/\badvised to ((?:avoid|rest|keep|use|apply|elevate|drink|wear|stop|refrain|continue|complete|not)\b(?:[^,.;\n]|\.(?=\d))+)/gi;let m;while((m=re.exec(raw))){const before=raw.slice(Math.max(0,raw.lastIndexOf(",",m.index)),m.index);if(/contacted|on[- ]call|reviewed/i.test(before))continue;const c=mcUnits(m[1]).replace(/[.\s]+$/,"");const kw=(c.toLowerCase().match(/[a-z]{5,}/g)||[]);const nt=mcText(L).toLowerCase();if(!kw.length||kw.filter(w=>nt.includes(w)).length*2>kw.length)continue;
+   mcIns(L,"MANAGEMENT","Advised to "+c+".","ret",S=>{for(let i=S.s+1;i<S.e;i++)if(/immediately if:/i.test(L[i][0]||""))return i;return -1});fx("dictated advice was missing — written: "+c)}}
+ if(fixes.length){B.audit=B.audit||[];[...new Set(fixes)].forEach(m=>B.audit.push({fix:true,m}))}
+ }catch(e){console.warn("p292",e)}return B}
+{const _a=auditApply;auditApply=function(B,raw){const R=_a(B,raw);try{mcApply(R,raw)}catch(e){}return R}}
+/* a rash that follows an antibiotic / a positive monospot is not "fever and rash illness" */
+{const _d=ndDetect;ndDetect=function(raw,B){const r=_d(raw,B);try{const t=String(raw||"").toLowerCase();if(Array.isArray(r)&&(/rash (?:after|following|since)(?: taking| starting| receiving| he took| she took)? (?:the |an? )?(?:amoxicillin|ampicillin|penicillin|augmentin|co-amoxiclav|antibiotics?|medic\w+|drugs?|tablets?)/.test(t)||/monospot (?:test )?(?:is |was )?positive|positive monospot|drug (?:rash|eruption)/.test(t)))return r.filter(h=>!(h&&/^(?:measles|rubella)$/.test(String(h.id||""))))}catch(e){}return r}}
+/* the same rules for Claude's rewrite */
+{const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n",'RULES\n0m. SEVERAL COMPLAINTS in one dictation ("and also", "also has"): every complaint goes in the presenting sentence in the doctor\'s words, every one gets its own findings, and the Impression names EVERY dictated problem (e.g. chest pain AND right leg DVT; head injury AND buckle fracture; threatened miscarriage AND urinary tract infection). Never drop the second complaint. Suicidal thoughts or self-harm that were dictated must always appear in the history and the impression. Every medicine "prescribed" or "discharged on" is written with its exact dose (keep decimals such as 0.4 mg) in ONE sentence; each medicine given in the ED keeps ITS OWN dictated time; do not put a time on advice or plaster lines. A medicine that was "stopped" or taken before arrival is never written as given. Left / right exactly as dictated. "Refusing to walk / eat / feed" is a symptom, never a refusal of treatment. An admitted patient gets NO return advice; "accepted admission" = admitted; "advised admission" = write that admission was advised. Do not write "alert", "vitally stable" or "well hydrated" when drowsiness, confusion, abnormal vitals, a postural drop or poor intake was dictated. Past history said before "came with" (diabetic, hypertensive, COPD, AF on warfarin, alcoholic) goes under past medical history, not as a complaint. Positive monospot = infectious mononucleosis: no antibiotics; a rash after an antibiotic is a drug rash, not measles.\n')}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
