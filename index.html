@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v272";
+const ER_VERSION="v273";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -22197,5 +22197,10 @@ if(FS_BI){try{Object.defineProperty(FS,"pass",{configurable:true,get(){return FS
  try{localStorage.removeItem("erFulPass")}catch(e){}
  {const _b=fsBar;fsBar=function(){const r=_b.apply(this,arguments);try{const b=$("fsBar");if(b){b.querySelectorAll("button").forEach(x=>{if(/turn off/i.test(x.textContent||""))x.style.display="none"});if(!b.querySelector(".fsAuto"))b.insertAdjacentHTML("beforeend",`<div class="fsAuto mini" style="margin-top:3px;color:#2e7d32">✓ The follow-up list syncs by itself between your phone and PC — nothing to type.</div>`)}}catch(e){}return r}}
  setTimeout(()=>{try{fsBar();fsSync(false)}catch(e){}},2500)}
+/* p299 — Follow-up list cards are readable in the dark theme (the card is white, so its text is dark), and the intro sentence says what is true now: the list syncs by itself. From the doctor's phone screenshot of 16 Nov 2026. */
+document.head.insertAdjacentHTML("beforeend",`<style>.fulC,.fulBox{background:#fff!important;color:#1a1a1a!important}.fulC .mini,.fulBox .mini{color:#555}.fulC .fulT{color:#1a1a1a}.fulC .fulU{color:#1a1a1a}.fulSnap{background:#fafafa!important;color:#1a1a1a!important}.fulC input,.fulC textarea{background:#fff;color:#1a1a1a;border:1px solid #bbb}</style>`);
+function fulIntroFix(){try{const p=$("fulPanel");if(!p)return;const w=document.createTreeWalker(p,NodeFilter.SHOW_TEXT);let n;while((n=w.nextNode())){if(/The list stays on this device/.test(n.nodeValue))n.nodeValue=n.nodeValue.replace(/The list stays on this device(?: unless you turn on the encrypted sync below)?\./,"The list is the same on your phone and your PC: it syncs by itself.")}}catch(e){}}
+{const _b=fsBar;fsBar=function(){const r=_b.apply(this,arguments);fulIntroFix();return r}}
+setTimeout(fulIntroFix,2800);
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
