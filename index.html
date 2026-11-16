@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v270";
+const ER_VERSION="v271";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -22183,5 +22183,12 @@ function rvApply(B,raw){try{if(!B||!B.L||B.addendum||B.ff)return B;raw=mcOrig(St
 /* p296 — the version number is easy to see (doctor, 16 Nov 2026): a blue pill beside the page title, and the corner label is larger and solid instead of faint grey. */
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{font:700 .82rem var(--body);color:#fff;background:#0d47a1;padding:3px 9px;border-radius:999px;box-shadow:0 1px 4px rgba(0,0,0,.35);opacity:.95;right:8px;bottom:8px;z-index:60}#erVerTop{display:inline-block;margin-left:8px;vertical-align:middle;font:700 .8rem var(--body);color:#fff;background:#0d47a1;padding:2px 10px;border-radius:999px;letter-spacing:.02em}@media print{#erVer,#erVerTop{display:none}}</style>`);
 try{const h=document.querySelector("h1");if(h&&!$("erVerTop"))h.insertAdjacentHTML("beforeend",`<span id="erVerTop" class="noprint">${ER_VERSION}</span>`);const v=$("erVer");if(v)v.textContent="Version "+ER_VERSION.replace(/^v/,"")}catch(e){}
+/* p297 — no example patient, ever (doctor, 16 Nov 2026): the page always opens on an empty form, on the phone, the PC and the Claude link. The old "Example patient loaded (suspected Achilles rupture)" start-up case is switched off. */
+example=function(){};
+setTimeout(()=>{try{const n=$("exNote");if(n)n.remove()}catch(e){}},50);
+/* an untouched form shows no note at all (before: "Patient." plus default return advice) */
+function formBlank(){try{if(S.sel.length||S.symO.length||Object.keys(S.ans||{}).length)return false;return ![...document.querySelectorAll(".main input, .main textarea")].some(el=>el.id!=="usePro"&&el.id!=="ccSearch"&&!el.closest("#qnPanel,#fulPanel,#gTop,.noprint")&&(el.type==="checkbox"||el.type==="radio"?el.checked&&el.id!=="usePro":String(el.value||"").trim()))}catch(e){return false}}
+{const _r=renderOut;renderOut=function(){_r.apply(this,arguments);try{if(formBlank()){const n=$("note");if(n)n.innerHTML=`<span class="mini" style="color:var(--muted,#888)">The note appears here as you fill in the form.</span>`;const s=document.querySelector("#selfChk,#auditBox");if(s)s.hidden=true}}catch(e){}}}
+setTimeout(()=>{try{renderOut()}catch(e){}},400);
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
