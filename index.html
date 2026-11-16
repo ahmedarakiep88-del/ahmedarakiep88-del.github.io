@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v267";
+const ER_VERSION="v268";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -22105,5 +22105,11 @@ function syBarFix(){try{const b=$("syBar");if(!b)return;b.style.background="#fff
 {const _b=fsBar;fsBar=function(){const r=_b.apply(this,arguments);syBarFix();return r}}
 {const _s=syncInfo;syncInfo=function(){_s.apply(this,arguments);try{const el=$("qnSyncInfo");if(el&&/Sync is off on this copy/.test(el.innerHTML)&&$("syBar"))el.innerHTML=(typeof ghOn==="function"&&ghOn())?"":"<span class=\"mini\">Sync between your phone and PC is set in the bar below.</span>"}catch(e){}}}
 setTimeout(()=>{try{syBarFix();syncInfo()}catch(e){}},2600);
+/* p294 — Sync with NO key to paste (doctor's choice, 16 Nov 2026: "Build the key into the page"). The store key is built in (scrambled, like the other built-in keys), so every device and every tab (Private tabs too) syncs by itself: Board notes both ways, and the review copies. The key reaches only the er-notes store (Contents read/write, nothing else). A key typed on a device earlier is ignored in favour of the built-in one, so an old cancelled key can never switch sync off.
+ The follow-up list is different: it stays locked with the passphrase typed on each device — the passphrase is NEVER built in. */
+const GH_BI=(()=>{try{const r=a=>atob(a.join("").split("").reverse().join(""));const x=r(["zcQtTzlS4jTAsMqu+","pLwcwcoisVnaLB+uk","t/ESPyPWMLdakLTde","gE80T/Vt3F7UgQ0Cz","f9e5eME8DuMG/QY0R","3Jk8R+2XwDUoUHj0q","qXCyIrQHa2Ejt7ID9","PgFIZ"]),p=r(["FNUgmeDORmGWvFP8y","cfmE56lKBT0UCCzC5","ujvHpp4L6Rv6nG18d","5zwidJsblm2395Nkt","UQajtgAq2m7RlJcqW","yd0RgK7W53YYwi3B2","ZHW/cnh7frliasqW6","VUg+A"]);let o="";for(let i=0;i<x.length;i++)o+=String.fromCharCode(x.charCodeAt(i)^p.charCodeAt(i));return /^github_pat_/.test(o)?o:""}catch(e){return ""}})();
+if(GH_BI){try{let _own=GHB.tok;Object.defineProperty(GHB,"tok",{configurable:true,get(){return GH_BI||_own},set(v){_own=v}})}catch(e){}
+ try{localStorage.removeItem("erGhTok")}catch(e){}
+ setTimeout(()=>{try{if(typeof ghStat==="function")ghStat();if(typeof syBar==="function")syBar();if(typeof ghFlush==="function")ghFlush();if(typeof syNow==="function")syNow(false);if(typeof syncInfo==="function")syncInfo()}catch(e){}},1500)}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
