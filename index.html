@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v271";
+const ER_VERSION="v272";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -22190,5 +22190,12 @@ setTimeout(()=>{try{const n=$("exNote");if(n)n.remove()}catch(e){}},50);
 function formBlank(){try{if(S.sel.length||S.symO.length||Object.keys(S.ans||{}).length)return false;return ![...document.querySelectorAll(".main input, .main textarea")].some(el=>el.id!=="usePro"&&el.id!=="ccSearch"&&!el.closest("#qnPanel,#fulPanel,#gTop,.noprint")&&(el.type==="checkbox"||el.type==="radio"?el.checked&&el.id!=="usePro":String(el.value||"").trim()))}catch(e){return false}}
 {const _r=renderOut;renderOut=function(){_r.apply(this,arguments);try{if(formBlank()){const n=$("note");if(n)n.innerHTML=`<span class="mini" style="color:var(--muted,#888)">The note appears here as you fill in the form.</span>`;const s=document.querySelector("#selfChk,#auditBox");if(s)s.hidden=true}}catch(e){}}}
 setTimeout(()=>{try{renderOut()}catch(e){}},400);
+/* p298 — the follow-up list syncs by itself on every device, nothing to type (doctor's decision, 16 Nov 2026, after being told twice what it means: "I want it to be automatic everywhere"; he chose a disguised MRN over a passphrase or a QR pairing).
+ The list is still stored ONLY as AES-256-GCM ciphertext in the private store (never plain text, never in notes / Telegram / ntfy / Claude), but the lock key is now built into the page (scrambled) instead of typed. This is a DISGUISE, not a secret: someone who takes the page apart can undo it. A passphrase typed earlier on a device is ignored so that all devices always use the same lock. */
+const FS_BI=(()=>{try{const r=a=>atob(a.join("").split("").reverse().join(""));const x=r(["=wlOv8P8vuHMK","lgkY0h5T9X0uw","wbfFNSd1XhFOp","3//GIdSf8SjJn","M50IU3fc"]),p=r(["=oxa+Z7s97UYN","4Wpv4HhHUzsdE","EP2g4AZoUyzvN","iJbREEHIm/K+8","Z8DYmm4H"]);let o="";for(let i=0;i<x.length;i++)o+=String.fromCharCode(x.charCodeAt(i)^p.charCodeAt(i));return o.length>=40?o:""}catch(e){return ""}})();
+if(FS_BI){try{Object.defineProperty(FS,"pass",{configurable:true,get(){return FS_BI},set(v){}})}catch(e){}
+ try{localStorage.removeItem("erFulPass")}catch(e){}
+ {const _b=fsBar;fsBar=function(){const r=_b.apply(this,arguments);try{const b=$("fsBar");if(b){b.querySelectorAll("button").forEach(x=>{if(/turn off/i.test(x.textContent||""))x.style.display="none"});if(!b.querySelector(".fsAuto"))b.insertAdjacentHTML("beforeend",`<div class="fsAuto mini" style="margin-top:3px;color:#2e7d32">✓ The follow-up list syncs by itself between your phone and PC — nothing to type.</div>`)}}catch(e){}return r}}
+ setTimeout(()=>{try{fsBar();fsSync(false)}catch(e){}},2500)}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
