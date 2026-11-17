@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v276";
+const ER_VERSION="v277";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -22286,5 +22286,35 @@ const C1H={on:true};
    if(j&&Array.isArray(j.system)&&j.system.some(b=>b&&b.cache_control&&!b.cache_control.ttl)){const j2=JSON.parse(init.body);j2.system.forEach(b=>{if(b&&b.cache_control&&!b.cache_control.ttl)b.cache_control={type:"ephemeral",ttl:"1h"}});
     const res=await _f.call(this,input,Object.assign({},init,{body:JSON.stringify(j2)}));if(res.status===400){C1H.on=false;return _f.call(this,input,init)}return res}}}catch(e){if(e&&e.name==="AbortError")throw e}
  return _f.call(this,input,init)}}
+/* p303 — the doctor's own medicines, written properly every time (doctor, 17 Nov 2026):
+  • Tilex = Tilex tablets (tizanidine 4 mg) — always one tablet ONCE BEFORE SLEEP, because it can cause drowsiness. Often mis-heard as "Dilux / Dilex / Tilix".
+  • Fevadol Plus = paracetamol 500 mg + codeine 8 mg (not plain paracetamol). Often mis-heard as "Fivudil / Fivadol / Fivodoplus / Hivudol plus".
+  • Loxoprofen patches — one patch once daily, not left on for more than 12 hours. Often mis-heard as "Loxapropin / Lexaprofin".
+ Applied to the speech correction, to Claude's rules and as a last check on every quick note. A different dose or frequency that the doctor dictates is kept. */
+const DR_TILEX=/\b(?:tilex|dilux|dillux|dilex|tilix|tylex|tilax|teelex|t-lex|telex(?= tab| once| before| at night))\b/gi;
+const DR_FEV=/\b(?:fevadol|fivadol|fivudil|fivodo|fivodoplus|hivudol|favadol|vivadol|fevadole|fevedol|fivadole)\b(?:[ -]?plus)?/gi;
+const DR_LOX=/\b(?:loxoprofen|loxapropin|lexaprofin|loxaprofen|loxoprofin|lexoprofen|loxaprophen|loxoprophen|roxoprofen|lexaprofen)\b/gi;
+const DR_FREQ=/\bonce\b|\btwice\b|times|daily|every \d|bedtime|at night|before sleep|before (?:he|she) (?:goes|sleeps)|goes to sleep|as needed|when needed|\bprn\b/i;
+function drNames(s){return String(s||"").replace(DR_TILEX,"Tilex").replace(DR_FEV,a=>/plus/i.test(a)||/fivodoplus/i.test(a)?"Fevadol Plus":"Fevadol").replace(DR_LOX,"loxoprofen")}
+function drApply(B,raw){try{if(!B||!B.L||B.addendum||B.ff)return B;raw=(typeof mcOrig==="function")?mcOrig(String(raw||"")):String(raw||"");const t=raw.toLowerCase();const has={til:new RegExp(DR_TILEX.source,"i").test(t),fev:/plus/.test((t.match(new RegExp(DR_FEV.source,"i"))||[""])[0])||/fivodoplus/.test(t),lox:new RegExp(DR_LOX.source,"i").test(t)};if(!has.til&&!has.fev&&!has.lox)return B;const L=B.L;const fixes=[],warn=[];let did={til:false,fev:false,lox:false};
+ const medCtx=z=>/^(?:med|dis)$/.test(z[1]||"")||/Discharge medicines|Prescribed|prescribed|discharged|(?:was|were) given|Regular medications/i.test(z[0]||"");const order=[...L.filter(z=>z[1]!=="h"&&medCtx(z)),...L.filter(z=>z[1]!=="h"&&!medCtx(z))];let pass=0;
+ order.forEach((z,idx)=>{const inMed=medCtx(z);let x=drNames(z[0]);if(has.fev)x=x.replace(/\bParacetamol plus\b/gi,"Fevadol Plus");
+  const medLine=!/immediately if:|^Nursing instructions/i.test(x)&&(inMed||!order.some(q=>medCtx(q)&&/Tilex|Fevadol Plus|loxoprofen/i.test(drNames(q[0]))))&&!/presented today/.test(x);
+  if(/\bTilex\b/.test(x)&&medLine){x=x.replace(/\bTilex\b(?: tablets?)?(?! \()/,"Tilex (tizanidine 4 mg) tablets");if(!did.til){const seg=x.slice(x.indexOf("Tilex"));const next=seg.split(/,| and (?=[A-Za-z]+ \d)|;|\./)[0];const own=seg.replace(/^Tilex \(tizanidine 4 mg\) tablets/,"").split(/ and (?=[A-Za-z])|,|;|\./)[0];if(/^\s*once\s*$/i.test(own))x=x.replace(/Tilex \(tizanidine 4 mg\) tablets once/,"Tilex (tizanidine 4 mg) tablets, one tablet once before sleep (may cause drowsiness)");else if(!DR_FREQ.test(own))x=x.replace(/Tilex \(tizanidine 4 mg\) tablets/,"Tilex (tizanidine 4 mg) tablets, one tablet once before sleep (may cause drowsiness)");else if(/twice|three|four|times|every \d/i.test(own))warn.push("Tilex was dictated more than once a day — you usually prescribe it once before sleep. Kept as dictated; check.");else if(!/drows/i.test(x)&&/before sleep|bedtime|at night|goes to sleep|sleeps/i.test(seg))x=x.replace(/Tilex \(tizanidine 4 mg\) tablets/,"Tilex (tizanidine 4 mg) tablets (may cause drowsiness)");did.til=true}}
+  if(/\bFevadol Plus\b/.test(x)&&medLine&&!did.fev){x=x.replace(/\bFevadol Plus\b(?! \()/,"Fevadol Plus (paracetamol 500 mg / codeine 8 mg)");did.fev=true}
+  if(/\bloxoprofen\b/.test(x)&&medLine&&!did.lox){x=x.replace(/\bloxoprofen\b(?: patch(?:es)?)?/i,"loxoprofen patches");if(!/12 hours/.test(x))x=x.replace(/loxoprofen patches/,"loxoprofen patches (one patch once daily, not left on for more than 12 hours)");did.lox=true}
+  if(x!==z[0]){z[0]=x.replace(/^([a-z])/,(a,b)=>b.toUpperCase())}});
+ if(did.til)fixes.push("Tilex written as Tilex (tizanidine 4 mg), once before sleep");if(did.fev)fixes.push("Fevadol Plus written with its contents (paracetamol 500 mg / codeine 8 mg)");if(did.lox)fixes.push("loxoprofen patches written with the 12-hour instruction");
+ if(has.til&&!did.til)warn.push("Tilex was dictated but is not in the note — check and add (Tilex, tizanidine 4 mg, once before sleep).");
+ if(has.fev&&!did.fev)warn.push("Fevadol Plus was dictated but is not in the note — check and add (paracetamol 500 mg / codeine 8 mg).");
+ if(has.lox&&!did.lox)warn.push("Loxoprofen patches were dictated but are not in the note — check and add (once daily, not more than 12 hours).");
+ if(did.fev){const am=(L.map(z=>z[0]).join(" ").match(/\b(\d{1,2})-year-old\b/)||[]);const ag=am[1]?parseInt(am[1],10):(/-(?:month|week|day)-old\b/.test(L.map(z=>z[0]).join(" "))?0:null);if(ag!==null&&ag<12)warn.push("Fevadol Plus contains CODEINE and the patient is under 12 years — codeine is contraindicated under 12. Check the prescription.")}
+ if(fixes.length||warn.length){B.audit=B.audit||[];fixes.forEach(m=>B.audit.push({fix:true,m}));warn.forEach(m=>B.audit.push({m}))}}catch(e){console.warn("p303",e)}return B}
+{const _a=auditApply;auditApply=function(B,raw){const R=_a(B,raw);try{drApply(R,raw)}catch(e){}return R}}
+/* speech correction: the words the microphone should prefer */
+try{const _v=qdcVocab;qdcVocab=function(){const v=_v.apply(this,arguments);return (Array.isArray(v)?v.join(" "):String(v||""))+" Tilex Fevadol Fevadol-Plus loxoprofen patches tizanidine"}}catch(e){}
+try{const _q=qdcPrompt;qdcPrompt=function(raw){return _q.apply(this,arguments)+'\nThis doctor\'s usual medicines — correct their mis-hearings: "Dilux / Dilex / Tilix / Tylex" = Tilex; "Fivudil / Fivadol / Fivodoplus / Hivudol (plus)" = Fevadol (Plus); "Loxapropin / Lexaprofin" = loxoprofen (patches).'}}catch(e){}
+/* Claude's rules */
+{const _p=qaiPrompt;qaiPrompt=function(raw,opt,draft){return _p(raw,opt,draft).replace("RULES\n",'RULES\n0p. THIS DOCTOR\'S MEDICINES — write them exactly like this: (1) "Tilex" (mis-heard as Dilux / Dilex / Tilix) = "Tilex (tizanidine 4 mg) tablets, one tablet once before sleep (may cause drowsiness)" — always once before sleep unless he dictates otherwise. (2) "Fevadol Plus" (mis-heard as Fivudil / Fivadol / Fivodoplus / Hivudol plus) = "Fevadol Plus (paracetamol 500 mg / codeine 8 mg)" — never write it as plain paracetamol or "Paracetamol plus"; plain "Fevadol" stays "Fevadol" (paracetamol). (3) "Loxoprofen patches" (mis-heard as Loxapropin / Lexaprofin) = "loxoprofen patches (one patch once daily, not left on for more than 12 hours)". Keep any dose, frequency or duration he dictates for them.\n')}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
