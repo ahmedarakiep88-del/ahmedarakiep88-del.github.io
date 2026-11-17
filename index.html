@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v275";
+const ER_VERSION="v276";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -22278,5 +22278,13 @@ function imInv(hits){const out=[];(hits||[]).forEach(h=>(h.t.v||[]).forEach(x=>{
 document.head.insertAdjacentHTML("beforeend",`<style>.imTwo{display:grid;grid-template-columns:1fr;gap:6px;margin:4px 0 6px}.imBx{border:1px solid #c5cae9;border-left:4px solid #283593;border-radius:8px;padding:5px 8px;background:#f5f7ff;color:#1a1a1a}.imBx.mon{border-color:#c8e6c9;border-left-color:#2e7d32;background:#f4fbf5}.imBx b{display:block;font-size:.78rem;margin-bottom:2px}.imBx ul{margin:0 0 0 16px;padding:0}.imBx li{margin:1px 0;font-size:.76rem;line-height:1.35}.imBx .src{font-size:.66rem;color:#607d8b;font-weight:400}</style>`);
 function imExtra(dx,hits){const inv=imInv(hits),mon=imMon(dx,hits);if(!inv.length&&!mon)return "";const ul=a=>`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`;
  return `<div class="imTwo">${inv.length?`<div class="imBx"><b>🔬 Investigations required</b>${ul(inv)}</div>`:""}${mon?`<div class="imBx mon"><b>📈 What to monitor <span class="src">(${mon.src})</span></b>${ul(mon.list)}</div>`:""}</div>`}
+/* p302 — cheaper Claude calls with the paid key (doctor, 17 Nov 2026). The fixed RULES block (about 7,000 tokens, identical for every note) was cached for 5 minutes only; the doctor's notes are usually 10–45 minutes apart, so almost every note paid the cache-WRITE price (1.25×) and never the cheap read (0.1×). The block is now cached for 1 hour: the first note of an hour pays 2×, every later note 0.1×. Measured on the real note times of 16 Nov: the rules block costs about one fifth of before. The text sent and the answer are unchanged.
+ Safe: if the service refuses the 1-hour setting, the call is repeated at once as before and the setting is switched off for this session. */
+const C1H={on:true};
+{const _f=window.fetch;window.fetch=async function(input,init){try{const url=typeof input==="string"?input:(input&&input.url)||"";
+  if(C1H.on&&init&&typeof init.body==="string"&&/\/v1\/messages(?:$|\?)/.test(url)&&/anthropic/.test(url+" "+JSON.stringify(init.headers||{}))){let j=null;try{j=JSON.parse(init.body)}catch(e){}
+   if(j&&Array.isArray(j.system)&&j.system.some(b=>b&&b.cache_control&&!b.cache_control.ttl)){const j2=JSON.parse(init.body);j2.system.forEach(b=>{if(b&&b.cache_control&&!b.cache_control.ttl)b.cache_control={type:"ephemeral",ttl:"1h"}});
+    const res=await _f.call(this,input,Object.assign({},init,{body:JSON.stringify(j2)}));if(res.status===400){C1H.on=false;return _f.call(this,input,init)}return res}}}catch(e){if(e&&e.name==="AbortError")throw e}
+ return _f.call(this,input,init)}}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
