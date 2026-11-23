@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v291";
+const ER_VERSION="v292";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -22921,7 +22921,7 @@ function r24Burn(B){try{if(!B||!B.L||!B.ff)return B;const L=B.L;const txt=()=>L.
  let site=get(/Sites? of injury: ([^.\n]+)\./i);const precise=get(/Precise site of injury: ([^.\n]+)\./i);const nice=x=>String(x||"").replace(/\b(right|left) back of the hand\b/g,"back of the $1 hand").replace(/\b(right|left) (wrist|hand|forearm|elbow|knee|ankle|foot|thigh|leg|arm|shoulder) \((front|back)\)/g,"$3 of the $1 $2").replace(/the (\w+ \(\w+\) surface of the )?wrist of the (right|left) wrist/,"the $1$2 wrist");const site0=site;site=nice(site);
  const upper=/hand|wrist|finger|thumb|forearm|elbow|arm|shoulder/i.test(site+" "+precise);
  const when=hrs?(+hrs<1?"less than 1 hour ago":+hrs===1?"about 1 hour ago":+hrs<48?`about ${hrs} hours ago`:`about ${Math.round(+hrs/24)} days ago`):"";
- const kindTxt=type?(/^chemical: (.+)/.test(type)?`chemical (${type.replace(/^chemical: /,"")}) burn`:/^electrical: (.+)/.test(type)?`electrical (${type.replace(/^electrical: /,"")}) burn`:/sunburn/.test(type)?"sunburn":`${type} burn`):"burn";
+ const kindTxt=type?(/^chemical: (.+)/.test(type)?`chemical (${type.replace(/^chemical: /,"")}) burn`:/^electrical: (.+)/.test(type)?`electrical (${type.replace(/^electrical: /,"")}) burn`:/sunburn/.test(type)?"sunburn":/^hot water/.test(type)?"scald from hot water or a hot drink":/^contact: hot object/.test(type)?"contact burn from a hot object":/^scald$/.test(type)?"scald":`${type} burn`):"burn";
  /* opener */
  {const i=find(/presented (?:today )?with c\/O burns?\./i);if(i>=0){const art=/^[aeiou]/i.test(kindTxt)?"an":"a";L[i][0]=L[i][0].replace(/presented (today )?with c\/O burns?\./i,`presented today following ${art} ${kindTxt}${when?" sustained "+when:""}${site?", sustaining "+(depth&&!/mixed/.test(depth)?(/^[aeiou]/i.test(depth)?"an ":"a ")+depth.replace(/ \(erythema only\)/,"")+" burn":"a burn")+" to the "+site.replace(/^the /,""):""}.`)}}
  /* history label line */
@@ -22958,5 +22958,7 @@ function r24Burn(B){try{if(!B||!B.L||!B.ff)return B;const L=B.L;const txt=()=>L.
  for(let i=L.length-1;i>0;i--)if(!(L[i][0]||"").trim()&&!(L[i-1][0]||"").trim())L.splice(i,1);
  }catch(e){console.warn("p317",e)}return B}
 {const _a=auditApply;auditApply=function(B,raw){const R=_a(B,raw);try{r24Burn(R)}catch(e){}return R}}
+/* p318 — burn causes (doctor, 23 Nov 2026: "the oil is not one of the burn causes"): hot oil, hot water / drink, steam and hot object added to "Type of burn" in the regular note's burn card. Additions only. */
+try{const c=CMAP["burns"];const f=c&&c.info&&c.info.find(x=>x.id==="btype");if(f&&f.o&&f.o.indexOf("hot oil")<0){const i=f.o.indexOf("scald");f.o.splice(i<0?1:i+1,0,"hot oil","hot water / hot drink","steam");const j=f.o.indexOf("contact");f.o.splice(j<0?f.o.length:j+1,0,"contact: hot object (iron, oven, exhaust)")}}catch(e){console.warn("p318",e)}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
