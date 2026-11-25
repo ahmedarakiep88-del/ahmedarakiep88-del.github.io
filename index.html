@@ -18579,7 +18579,7 @@ TG.autoAi=(()=>{try{return localStorage.getItem("erTgAutoAi")!=="0"}catch(e){ret
    if(!QAI.busy&&!QAI.B){qvStatus("<b>Claude could not write this note</b> ("+($("qaiStat")?$("qaiStat").textContent:"")+"). The draft was saved and sent; press <b>Rewrite now</b> to try again.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}
    if(n>240){qvStatus("<b>Claude did not finish in 60 seconds;</b> the draft note was saved and sent.");qnAdd(qnText(qnLast.B),qnHTML(qnLast.B,false),"quick");return}setTimeout(tick,250)};setTimeout(tick,600)}}
 /* p198 — a visible version number and a Telegram status line, so what happened can be seen on the page */
-const ER_VERSION="v298";
+const ER_VERSION="v299";
 document.head.insertAdjacentHTML("beforeend",`<style>#erVer{position:fixed;right:8px;bottom:6px;font:600 .7rem var(--body);color:#999;z-index:5;pointer-events:none}#tgLast{font-size:.8rem;margin:4px 0;color:var(--muted,#666)}#tgLast.ok{color:#2e7d32}#tgLast.bad{color:#c62828}</style>`);
 document.body.insertAdjacentHTML("beforeend",`<div id="erVer">ER Doctor Note ${ER_VERSION}</div>`);
 {const row=$("tgNote")&&$("tgNote").parentElement;if(row)row.insertAdjacentHTML("afterend",`<div id="tgLast">Telegram: nothing sent yet in this session.</div>`)}
@@ -23025,5 +23025,14 @@ if(typeof pdDraw==="function"){const _p=pdDraw;pdDraw=function(){const r=_p.appl
  const _qs=qnShow;qnShow=function(t){const r=_qs.apply(this,arguments);try{fix();if(t==="board"){const w=$("pdWrap");if(w)w.open=false}}catch(e){}return r};setTimeout(fix,1800)}
 /* a tick or "Clear all" made on one device reaches the other: a change of the pending items marks the note as updated (see p322) */
 if(typeof qnStore==="function"){const _st=qnStore;qnStore=function(a){try{if(!(typeof SY!=="undefined"&&SY.merging)&&Array.isArray(a)){const old=new Map(qnLoad().map(x=>[String(x.id),x]));const now=new Date().toISOString();a.forEach(x=>{const o=old.get(String(x.id));if(o&&JSON.stringify((o.pending||[]).map(p=>[p.item,!!p.done]))!==JSON.stringify((x.pending||[]).map(p=>[p.item,!!p.done])))x.tu=now})}}catch(e){}return _st.apply(this,arguments)}}
+/* p326 — speech-recognition disclaimer (doctor, 25 Nov 2026, from the wording used in the department's Epic notes): written as the first line of every note, quick and regular, above HISTORY. Not added to an addendum. Additions only. */
+const ER_DISC="Disclaimer: Please note this report has been produced using speech recognition software and may contain errors related to that system including errors in grammar, punctuation, and spelling, as well as words and phrases that may be inappropriate. If there are any questions or concerns please feel free to contact the dictating physician for clarification. Times documented are approximate and based on contemporaneous records where available.";
+function discApply(B){try{if(!B||!B.L||!B.L.length||B.addendum)return B;if(B.L.some(z=>/^Disclaimer: Please note this report has been produced using speech recognition/.test(z[0]||"")))return B;if(!B.L.some(z=>z[1]==="h"))return B;B.L.unshift([ER_DISC,"disc"],["",""])}catch(e){}return B}
+{const _a=auditApply;auditApply=function(B,raw){const R=_a(B,raw);try{discApply(R)}catch(e){}return R}}
+document.head.insertAdjacentHTML("beforeend",`<style>.erDisc{font-style:italic;font-size:.86em}</style>`);
+{const tidy=h=>{try{return String(h).replace(/<span[^>]*>(Disclaimer: Please note this report has been produced using speech recognition[^<]*)<\/span>/,'<span class="erDisc" style="color:#455a64;font-style:italic">$1</span>')}catch(e){return h}};if(typeof qnHTML==="function"){const _h=qnHTML;qnHTML=function(){return tidy(_h.apply(this,arguments))}}}
+{const fixDom=()=>{try{document.querySelectorAll("span").forEach(s=>{if(s.children.length===0&&/^Disclaimer: Please note this report has been produced using speech recognition/.test(s.textContent||"")&&!s.classList.contains("erDisc")){s.classList.add("erDisc");s.style.color="#455a64";s.style.fontStyle="italic"}})}catch(e){}};
+ if(typeof renderOut==="function"){const _r=renderOut;renderOut=function(){const r=_r.apply(this,arguments);fixDom();return r}}
+ ["noteHTML","noteHtml"].forEach(n=>{try{if(typeof window[n]==="function"){const _f=window[n];window[n]=function(){return String(_f.apply(this,arguments)).replace(/<span[^>]*>(Disclaimer: Please note this report has been produced using speech recognition[^<]*)<\/span>/,'<span class="erDisc" style="color:#455a64;font-style:italic">$1</span>')}}}catch(e){}})}
 example();drawSymChips();drawSymRows();syncPro();patientUI();drawCC();renderCards();renderOut();
 </script>
